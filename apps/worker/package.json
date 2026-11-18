@@ -1,0 +1,19 @@
+{
+  "name": "@sistema/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx watch src/main.ts",
+    "start": "node --import ../../infra/production-env.mjs dist/main.js"
+  },
+  "dependencies": {
+    "@sistema/db": "workspace:*",
+    "@sistema/integracoes": "workspace:*",
+    "@sistema/media": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.0"
+  }
+}

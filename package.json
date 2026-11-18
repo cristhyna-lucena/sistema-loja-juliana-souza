@@ -1,0 +1,44 @@
+{
+    "name":  "sistema-loja",
+    "version":  "0.1.0",
+    "private":  true,
+    "packageManager":  "pnpm@12.15.0",
+    "engines":  {
+                    "node":  "\u003e=24 \u003c25"
+                },
+    "scripts":  {
+                    "dev":  "turbo run dev",
+                    "start":  "turbo run start --env-mode=loose",
+                    "test:producao":  "node --test tests/production-start.test.mjs",
+                    "test:e2e":  "node tests/e2e/inventory.mjs && node tests/e2e/run.mjs",
+                    "build":  "turbo run build",
+                    "typecheck":  "turbo run typecheck",
+                    "test":  "node --test tests/health.test.mjs",
+                    "check":  "pnpm typecheck \u0026\u0026 pnpm build \u0026\u0026 pnpm test",
+                    "infra:env":  "node infra/create-local-env.mjs",
+                    "infra:up":  "docker compose --env-file .env -f infra/docker-compose.yml up -d --wait",
+                    "infra:stop":  "docker compose --env-file .env -f infra/docker-compose.yml stop",
+                    "db:migrate":  "pnpm --filter @sistema/db migrate:deploy",
+                    "db:status":  "pnpm --filter @sistema/db migrate:status",
+                    "test:infra":  "pnpm --filter @sistema/db build \u0026\u0026 pnpm --filter @sistema/db test",
+                    "test:auth":  "pnpm --filter @sistema/api exec node --test tests/auth.test.mjs",
+                    "admin:create":  "pnpm --filter @sistema/api exec node scripts/create-admin.mjs",
+                    "test:catalogo":  "pnpm --filter @sistema/api exec node --test tests/catalogo.test.mjs",
+                    "test:gestao":  "pnpm --filter @sistema/api exec node --test tests/gestao.test.mjs tests/custos-migracao.test.mjs",
+                    "test:gestao:painel":  "pnpm --filter @sistema/api exec node --test tests/gestao-painel.test.mjs",
+                    "test:comercial":  "pnpm --filter @sistema/api exec node --test tests/comercial.test.mjs",
+                    "test:comercial:painel":  "pnpm --filter @sistema/api exec node --test tests/comercial-painel.test.mjs",
+                    "media:env":  "node infra/configure-media-env.mjs",
+                    "test:fotos":  "pnpm --filter @sistema/api exec node --test tests/fotos.test.mjs",
+                    "media:build":  "docker compose --env-file .env -f infra/docker-compose.yml build minio",
+                    "test:operacoes":  "pnpm --filter @sistema/api exec node --test tests/operacoes.test.mjs tests/integracoes.test.mjs",
+                    "test:operacoes:painel":  "pnpm --filter @sistema/api exec node --test tests/operacoes-painel.test.mjs",
+                    "verificar:prontidao":  "node apps/api/scripts/verificar-prontidao.mjs"
+                },
+    "devDependencies":  {
+                            "turbo":  "2.11.10",
+                            "typescript":  "~5.9.3",
+                            "@types/node":  "^24.0.0",
+                            "@playwright/test":  "^1.51.1"
+                        }
+}

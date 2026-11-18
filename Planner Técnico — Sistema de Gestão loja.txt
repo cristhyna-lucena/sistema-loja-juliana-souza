@@ -1,0 +1,643 @@
+Planner Técnico — Sistema de Gestão e Loja Virtual (Cosméticos)
+22 de out. de 2026 · @Someone
+Visão geral
+O sistema é uma plataforma única com duas frentes: a loja virtual, usada pelos clientes, e a área administrativa, usada pela cliente e pela contadora. As duas falam com a mesma API e o mesmo banco.
+A regra que guia o projeto: estoque e financeiro nunca são editados direto. Saldo de estoque é a soma das movimentações, e caixa é a soma dos lançamentos. Nota de compra, venda, serviço realizado e ajuste geram movimentações. Isso mantém tudo auditável e evita saldo "mágico".
+Decisões tomadas
+• Stack própria em TypeScript, sem WordPress.
+• Hospedagem em VPS (Hostinger KVM 2) com Docker.
+• Focus NFe para emissão (NF-e, NFC-e, NFS-e) e para entrada das notas recebidas.
+• API dos Correios para frete, etiqueta e rastreio, com Melhor Envio como alternativa se não houver contrato.
+• Uma empresa por instalação agora, mas toda tabela já tem empresaId para virar multiempresa depois sem migração dolorosa.
+Stack e linguagens
+Tudo em TypeScript, do banco à tela. Um só idioma reduz troca de contexto e permite compartilhar tipos e validações entre loja, painel e API.
+Camada
+Tecnologia
+Por quê
+Loja virtual
+Next.js 15 (App Router, SSR)
+Página rápida e bem indexada no Google
+Painel admin
+Next.js 15 + TanStack Query + TanStack Table
+Tabelas com filtro, paginação e cache sem esforço
+Interface
+Tailwind CSS + shadcn/ui + Lucide
+Visual profissional e componentes acessíveis
+Formulários
+React Hook Form + Zod
+Mesma validação no front e na API
+API
+NestJS + Prisma
+Módulos organizados, injeção de dependência, ORM tipado
+Banco
+PostgreSQL 16
+Transações, decimal exato para dinheiro, JSONB para XML/payloads
+Filas
+Redis + BullMQ
+Emissão de nota, consultas e rastreio em segundo plano, com nova tentativa automática
+Arquivos
+MinIO (S3 compatível)
+Fotos, XMLs e PDFs no próprio servidor
+Autenticação
+Sessão em cookie httpOnly + Argon2
+Seguro e simples; perfis por papel
+E-mail
+Resend ou SMTP
+Nota fiscal, rastreio e recuperação de senha
+Testes
+Vitest + Playwright
+Regras de negócio e fluxos de compra de ponta a ponta
+Monitoramento
+Sentry + Uptime Kuma
+Erros em produção e aviso se o site cair
+Dinheiro sempre em Decimal(12,2) e quantidade em Decimal(12,3), nunca float.
+Estrutura do projeto
+Um monorepo com pnpm e Turborepo. Os pacotes compartilhados garantem que um campo novo no banco aparece tipado na API, no painel e na loja.
+cosmeticos/
+├── apps/
+│   ├── loja/          # Next.js — loja virtual (loja.dominio.com.br)
+│   ├── admin/         # Next.js — painel (admin.dominio.com.br)
+│   ├── api/           # NestJS — REST (api.dominio.com.br)
+│   │   └── src/modules/
+│   │       ├── auth/  usuarios/  clientes/  fornecedores/
+│   │       ├── produtos/  servicos/  estoque/
+│   │       ├── fiscal/          # Focus NFe: emitidas e recebidas
+│   │       ├── vendas/  pagamentos/  envios/
+│   │       ├── financeiro/      # títulos, lançamentos, caixa
+│   │       └── webhooks/        # Focus, gateway, Correios
+│   └── worker/        # processadores BullMQ (mesmo código da API)
+├── packages/
+│   ├── db/            # schema Prisma, migrations, seed
+│   ├── shared/        # schemas Zod, enums, tipos, formatadores (CPF, CEP, R$)
+│   ├── ui/            # componentes shadcn com o tema da marca
+│   └── integracoes/   # clientes HTTP: focus.ts, correios.ts, gateway.ts
+├── infra/
+│   ├── docker-compose.yml
+│   └── backup/        # script pg_dump → Cloudflare R2
+└── turbo.json
+Cada módulo da API segue o mesmo padrão: controller (rotas), service (regra de negócio), dto (Zod) e testes. Regra de negócio nunca fica no controller.
+Modelo de dados
+O banco tem seis grupos: acesso, cadastros, estoque, fiscal, vendas e financeiro. Abaixo, o schema Prisma do núcleo; campos de auditoria (createdAt, updatedAt) e empresaId ficam em todos os modelos e foram omitidos para leitura.
+// ───────── Acesso ─────────
+enum Perfil { ADMIN CONTADORA OPERADOR }
+
+model Usuario {
+  id        String  @id @default(cuid())
+  nome      String
+  email     String  @unique
+  senhaHash String
+  perfil    Perfil
+  ativo     Boolean @default(true)
+}
+
+model AuditLog {
+  id         String @id @default(cuid())
+  usuarioId  String?
+  acao       String          // CRIAR, EDITAR, CANCELAR...
+  entidade   String
+  entidadeId String
+  dados      Json
+}
+
+// ───────── Cadastros ─────────
+enum TipoProduto { REVENDA INSUMO AMBOS }
+
+model Produto {
+  id             String      @id @default(cuid())
+  nome           String
+  slug           String      @unique
+  descricao      String?
+  tipo           TipoProduto
+  sku            String      @unique
+  ean            String?
+  ncm            String
+  cest           String?
+  cfopVenda      String      @default("5102")
+  unidade        String      // UN, ML, G
+  precoVenda     Decimal     @db.Decimal(12,2)
+  custoMedio     Decimal     @db.Decimal(12,4) @default(0)
+  estoqueMinimo  Decimal     @db.Decimal(12,3) @default(0)
+  controlaLote   Boolean     @default(true)
+  pesoGramas     Int?
+  alturaCm       Int?
+  larguraCm      Int?
+  comprimentoCm  Int?
+  publicadoLoja  Boolean     @default(false)
+  ativo          Boolean     @default(true)
+  categoriaId    String?
+  imagens        ProdutoImagem[]
+  lotes          Lote[]
+}
+
+model ProdutoImagem { id String @id @default(cuid()) produtoId String url String ordem Int }
+
+model Lote {
+  id        String   @id @default(cuid())
+  produtoId String
+  numero    String
+  validade  DateTime?
+  @@unique([produtoId, numero])
+}
+
+model Servico {
+  id                  String  @id @default(cuid())
+  nome                String
+  descricao           String?
+  preco               Decimal @db.Decimal(12,2)
+  duracaoMin          Int
+  codigoServicoMunic  String  // ex.: 06.02
+  vendidoComoVoucher  Boolean @default(true)
+  publicadoLoja       Boolean @default(false)
+  insumos             ServicoInsumo[]   // ficha técnica
+}
+
+model ServicoInsumo {
+  servicoId  String
+  produtoId  String
+  quantidade Decimal @db.Decimal(12,3)   // ex.: 30 (ml)
+  @@id([servicoId, produtoId])
+}
+
+model Fornecedor { id String @id @default(cuid()) cnpj String @unique razaoSocial String email String? telefone String? }
+
+model Cliente {
+  id               String    @id @default(cuid())
+  nome             String
+  cpfCnpj          String?   @unique
+  email            String?   @unique
+  telefone         String?
+  senhaHash        String?   // só quem cria conta na loja
+  consentimentoEm  DateTime? // LGPD
+  enderecos        Endereco[]
+}
+
+model Endereco {
+  id String @id @default(cuid()) clienteId String
+  cep String  logradouro String  numero String  complemento String?
+  bairro String  cidade String  uf String  codigoIbge String
+}
+
+// ───────── Estoque ─────────
+enum TipoMovimento { ENTRADA_NF VENDA CONSUMO_SERVICO AJUSTE DEVOLUCAO CANCELAMENTO }
+
+model MovimentoEstoque {
+  id         String        @id @default(cuid())
+  produtoId  String
+  loteId     String?
+  tipo       TipoMovimento
+  quantidade Decimal       @db.Decimal(12,3)  // + entra, − sai
+  custoUnit  Decimal?      @db.Decimal(12,4)
+  origemTipo String        // NotaRecebida, Venda, Voucher, Ajuste
+  origemId   String
+  motivo     String?       // obrigatório em AJUSTE
+  usuarioId  String?
+  @@index([produtoId, loteId])
+}
+
+model ReservaEstoque {
+  id String @id @default(cuid()) vendaId String produtoId String
+  quantidade Decimal @db.Decimal(12,3)  expiraEm DateTime
+}
+
+// ───────── Fiscal ─────────
+enum StatusNotaRecebida { NOVA CIENCIA IMPORTADA IGNORADA }
+
+model NotaRecebida {
+  id            String             @id @default(cuid())
+  chave         String             @unique
+  fornecedorId  String?
+  numero        String
+  serie         String
+  emitidaEm     DateTime
+  valorTotal    Decimal            @db.Decimal(12,2)
+  status        StatusNotaRecebida @default(NOVA)
+  xmlUrl        String?
+  itens         NotaRecebidaItem[]
+}
+
+model NotaRecebidaItem {
+  id               String   @id @default(cuid())
+  notaId           String
+  codigoFornecedor String
+  descricao        String
+  ncm              String
+  unidade          String
+  quantidade       Decimal  @db.Decimal(12,3)
+  valorUnit        Decimal  @db.Decimal(12,4)
+  lote             String?
+  validade         DateTime?
+  produtoId        String?  // preenchido pelo de-para
+  fatorConversao   Decimal  @db.Decimal(12,3) @default(1)
+}
+
+model VinculoFornecedorProduto {   // memória do de-para
+  fornecedorId     String
+  codigoFornecedor String
+  produtoId        String
+  fatorConversao   Decimal @db.Decimal(12,3)
+  @@id([fornecedorId, codigoFornecedor])
+}
+
+enum ModeloNota { NFE NFCE NFSE }
+enum StatusNota { PROCESSANDO AUTORIZADA ERRO CANCELADA }
+
+model NotaEmitida {
+  id        String     @id @default(cuid())
+  vendaId   String
+  modelo    ModeloNota
+  ref       String     @unique   // referência enviada à Focus
+  status    StatusNota @default(PROCESSANDO)
+  numero    String?
+  serie     String?
+  chave     String?
+  danfeUrl  String?
+  xmlUrl    String?
+  mensagem  String?    // retorno da SEFAZ/prefeitura
+}
+
+// ───────── Vendas ─────────
+enum OrigemVenda { LOJA BALCAO }
+enum StatusVenda { AGUARDANDO_PAGAMENTO PAGA FATURADA ENVIADA ENTREGUE CANCELADA }
+
+model Venda {
+  id            String      @id @default(cuid())
+  numero        Int         @unique @default(autoincrement())
+  origem        OrigemVenda
+  clienteId     String?
+  enderecoId    String?
+  status        StatusVenda
+  subtotal      Decimal     @db.Decimal(12,2)
+  desconto      Decimal     @db.Decimal(12,2) @default(0)
+  frete         Decimal     @db.Decimal(12,2) @default(0)
+  total         Decimal     @db.Decimal(12,2)
+  cpfNaNota     Boolean     @default(false)
+  notaPorEmail  Boolean     @default(true)
+  itens         VendaItem[]
+}
+
+model VendaItem {
+  id         String  @id @default(cuid())
+  vendaId    String
+  produtoId  String?   // um dos dois
+  servicoId  String?
+  quantidade Decimal @db.Decimal(12,3)
+  precoUnit  Decimal @db.Decimal(12,2)
+}
+
+model Voucher {
+  id String @id @default(cuid()) codigo String @unique vendaItemId String
+  servicoId String  clienteId String  status String  // ATIVO USADO EXPIRADO
+  validoAte DateTime  usadoEm DateTime?
+}
+
+model Pagamento {
+  id String @id @default(cuid()) vendaId String
+  gateway String  gatewayId String? @unique
+  metodo String   // PIX CARTAO DINHEIRO DEBITO
+  valor Decimal @db.Decimal(12,2)  status String  pagoEm DateTime?
+}
+
+model Envio {
+  id             String  @id @default(cuid())
+  vendaId        String  @unique
+  servico        String  // PAC, SEDEX
+  valorFrete     Decimal @db.Decimal(12,2)
+  prazoDias      Int
+  codigoRastreio String?
+  etiquetaUrl    String?
+  status         String
+  eventos        EnvioEvento[]
+}
+
+model EnvioEvento { id String @id @default(cuid()) envioId String descricao String local String? ocorridoEm DateTime }
+
+// ───────── Financeiro ─────────
+enum TipoTitulo { PAGAR RECEBER }
+enum StatusTitulo { ABERTO PARCIAL PAGO CANCELADO }
+
+model Titulo {
+  id           String       @id @default(cuid())
+  tipo         TipoTitulo
+  descricao    String
+  fornecedorId String?
+  clienteId    String?
+  origemTipo   String?      // NotaRecebida, Venda, Manual
+  origemId     String?
+  parcela      Int          @default(1)
+  totalParcelas Int         @default(1)
+  vencimento   DateTime
+  valor        Decimal      @db.Decimal(12,2)
+  valorPago    Decimal      @db.Decimal(12,2) @default(0)
+  status       StatusTitulo @default(ABERTO)
+  categoriaId  String?
+}
+
+model ContaFinanceira { id String @id @default(cuid()) nome String tipo String } // CAIXA, BANCO, GATEWAY
+
+model Lancamento {
+  id          String  @id @default(cuid())
+  contaId     String
+  tituloId    String?
+  tipo        String  // ENTRADA SAIDA
+  valor       Decimal @db.Decimal(12,2)
+  data        DateTime
+  forma       String  // PIX, DINHEIRO, CARTAO, BOLETO
+  categoriaId String?
+}
+
+model CategoriaFinanceira { id String @id @default(cuid()) nome String tipo String }
+
+// ───────── Integrações ─────────
+model WebhookEvento {
+  id          String    @id @default(cuid())
+  origem      String    // FOCUS, GATEWAY, CORREIOS
+  chaveExterna String
+  payload     Json
+  processadoEm DateTime?
+  @@unique([origem, chaveExterna])  // evita processar duas vezes
+}
+Como os saldos saem do banco
+• Estoque do produto: SUM(quantidade) dos movimentos do produto, por lote. Disponível na loja = estoque − reservas não expiradas.
+• Custo médio: recalculado a cada entrada de nota.
+• Saldo de caixa: SUM dos lançamentos da conta.
+• Fluxo projetado: lançamentos realizados + títulos em aberto pelo vencimento.
+Crie uma view materializada saldo_estoque atualizada pelo worker para o painel não somar milhares de linhas a cada clique.
+Fluxos críticos
+Estes três fluxos são o coração do sistema. Cada passo que muda estoque ou financeiro roda dentro de uma transação do banco: ou tudo grava, ou nada grava.
+Entrada de nota de compra
+1. O worker consulta a Focus a cada 2 horas pelas notas emitidas contra o CNPJ e salva as novas como NOVA.
+2. O sistema manifesta ciência da operação e baixa o XML completo.
+3. Na tela de entrada, cada item do XML é ligado a um produto. Se existe VinculoFornecedorProduto, o vínculo e o fator de conversão vêm prontos.
+4. A cliente confere lote e validade e clica em Dar entrada.
+5. Em uma transação: cria movimentos ENTRADA_NF, recalcula o custo médio, salva os vínculos novos, cria os títulos a pagar a partir das duplicatas e marca a nota como IMPORTADA.
+6. O sistema manifesta confirmação da operação na Focus.
+Venda na loja até a entrega
+1. Checkout cria a venda AGUARDANDO_PAGAMENTO e reserva o estoque por 30 minutos.
+2. O gateway gera o Pix ou processa o cartão. O webhook confirma, a venda vira PAGA e a reserva vira movimento VENDA (baixa pelo lote que vence primeiro).
+3. Um job de emissão monta a NF-e com o CPF do cliente (se cpfNaNota) e envia à Focus com uma ref única.
+4. O webhook da Focus devolve AUTORIZADA: a venda vira FATURADA, o DANFE e o XML vão para o armazenamento e, se notaPorEmail, para o cliente.
+5. A cliente gera a etiqueta no pedido. O código de rastreio é salvo e a venda vira ENVIADA.
+6. O worker consulta o rastreio a cada 4 horas, grava os eventos e avisa o cliente a cada mudança, até ENTREGUE.
+7. Em paralelo, o pagamento gera o título a receber (já baixado no Pix, ou com a data de repasse no cartão).
+Serviço vendido como voucher
+1. A venda do serviço gera um Voucher com código único e emite a NFS-e conforme a regra do município.
+2. No atendimento, a cliente marca o voucher como usado.
+3. O sistema lê a ficha técnica do serviço e cria movimentos CONSUMO_SERVICO para cada insumo (ex.: 30 ml de óleo).
+Cancelamentos
+Cancelar uma venda autorizada pede justificativa, cancela a nota na Focus (dentro do prazo legal), cria movimentos CANCELAMENTO que devolvem o estoque e estorna os títulos. Nada é apagado.
+Telas e rotas
+As telas do protótipo (página inicial, checkout e painel) servem de base visual. O perfil Contadora vê apenas Fiscal, Financeiro e relatórios.
+Área administrativa
+Rota
+Tela
+O que faz
+/login
+Login
+E-mail e senha, recuperação por e-mail
+/
+Painel
+Vendas do dia, contas do dia, pedidos a enviar, alertas de estoque e notas recebidas
+/pedidos
+Pedidos
+Lista da loja e do balcão com filtro por status, CPF na nota e entrega
+/pedidos/[id]
+Detalhe do pedido
+Itens, pagamento, nota, gerar etiqueta, linha do tempo do rastreio
+/vendas/nova
+Venda no balcão
+PDV simples: busca produto ou serviço, cliente opcional, forma de pagamento, emitir NFC-e
+/produtos
+Produtos
+Lista com saldo, mínimo, validade; publicar ou ocultar na loja
+/produtos/[id]
+Ficha do produto
+Dados fiscais, fotos (arrastar para ordenar), lotes, histórico de movimentos
+/servicos e /servicos/[id]
+Serviços
+Preço, duração, código municipal e ficha técnica de insumos
+/vouchers
+Vouchers
+Buscar código e marcar como usado
+/estoque
+Movimentações
+Extrato por produto e ajuste manual com motivo
+/fiscal/recebidas
+Notas recebidas
+Lista vinda da Focus com status
+/fiscal/recebidas/[chave]
+Dar entrada
+Tela de de-para item a item, lote, validade e parcelas
+/fiscal/emitidas
+Notas emitidas
+DANFE, XML, cancelar, carta de correção, baixar XMLs do mês (contadora)
+/financeiro/pagar e /receber
+Contas
+Títulos por vencimento, baixa total ou parcial
+/financeiro/caixa
+Caixa
+Abertura, movimentos do dia e fechamento
+/financeiro/fluxo
+Fluxo de caixa
+Gráfico e tabela realizado x projetado por dia, semana e mês
+/clientes e /fornecedores
+Cadastros
+Dados, endereços, histórico de compras
+/configuracoes
+Configurações
+Dados da empresa, regime tributário, séries, usuários e perfis, integrações
+Loja virtual
+Rota
+Tela
+O que faz
+/
+Página inicial
+Destaque, mais vendidos, procedimentos em voucher
+/produtos e /c/[categoria]
+Catálogo
+Filtros e busca
+/p/[slug]
+Produto
+Fotos, descrição, preço, frete pelo CEP, adicionar ao carrinho
+/servicos/[slug]
+Serviço
+Descrição, duração, comprar voucher
+/carrinho
+Carrinho
+Itens, cupom, cálculo de frete
+/checkout
+Checkout
+Dados, endereço pelo CEP, frete, CPF na nota, nota por e-mail, pagamento
+/pedido/[numero]
+Confirmação
+QR Code do Pix, status e rastreio
+/conta
+Minha conta
+Pedidos, endereços, vouchers, dados e exclusão de conta (LGPD)
+/entrar e /cadastro
+Acesso
+Login e cadastro do cliente
+/privacidade, /trocas
+Institucional
+Política de privacidade, trocas e devoluções
+Imagens: upload, compressão e redimensionamento
+A cliente sobe a foto do jeito que tirou no celular, e o sistema cuida do resto. Nenhuma imagem pesada chega à loja: cada foto vira várias versões leves, e o navegador baixa só a do tamanho certo.
+Como a imagem entra
+1. No painel, a cliente arrasta as fotos para a ficha do produto. Aceita JPG, PNG, WebP e HEIC (padrão do iPhone), até 15 MB cada e 8 fotos por produto.
+2. Ainda no navegador, a foto é reduzida para no máximo 2560 px com browser-image-compression. Isso corta o upload de 8 MB para cerca de 1 MB, o que importa no 4G.
+3. A API devolve uma URL assinada e o arquivo vai direto para o MinIO, sem passar pela API. A tela mostra barra de progresso.
+4. A API registra a ProdutoImagem como PROCESSANDO e coloca um job na fila imagens.
+5. O worker processa com sharp, grava as versões e marca a imagem como PRONTA. A miniatura aparece no painel em poucos segundos.
+O que o worker faz em cada foto
+• Confere o tipo real pelo conteúdo do arquivo, não pela extensão, e recusa imagens acima de 40 megapixels.
+• Corrige a rotação pelo EXIF e depois remove todo o EXIF, inclusive a localização do celular.
+• Converte para sRGB, para a cor do produto não mudar entre telas.
+• Enquadra em 1:1 com fundo branco (contain), para o catálogo ficar alinhado sem cortar o frasco.
+• Gera as versões abaixo em AVIF (qualidade ~50) e WebP (qualidade ~78), mais um JPEG de 1024 px para e-mail e redes sociais.
+• Gera um placeholder borrado de 16 px em base64, salvo no banco, que aparece enquanto a foto carrega.
+• Guarda o original num bucket privado, para gerar novos tamanhos no futuro sem pedir a foto de novo.
+Versão
+Largura
+Onde aparece
+thumb
+160 px
+Listas do painel, carrinho, resumo do pedido
+card
+480 px
+Cards do catálogo e mais vendidos
+produto
+1024 px
+Página do produto
+zoom
+2048 px
+Zoom e tela cheia
+Banners da página inicial seguem o mesmo fluxo, sem o enquadramento 1:1, com versões de 768, 1280 e 1920 px.
+Como a imagem é entregue
+• Caminho com hash do conteúdo: produtos/{produtoId}/{hash}-480.avif. Como o nome muda quando a foto muda, o cache pode ser de 1 ano (Cache-Control: public, max-age=31536000, immutable).
+• Cloudflare na frente do MinIO, então a maioria das imagens sai do cache sem tocar na VPS.
+• No Next.js, <Image> com loader próprio apontando para as versões prontas. O otimizador nativo do Next fica desligado, para não gastar CPU da VPS redimensionando a cada visita.
+• srcset e sizes em todo card, loading="lazy" fora da primeira dobra e priority só no banner principal.
+• Texto alternativo obrigatório no upload (sugestão automática: nome do produto), bom para acessibilidade e para o Google.
+Na tela do painel
+• Arrastar para reordenar; a primeira foto é a principal.
+• Pré-visualização de como fica no card e na página do produto.
+• Botão para trocar ou excluir. Excluir remove a imagem da loja na hora e apaga os arquivos depois de 7 dias, caso tenha sido engano.
+Ajuste no schema
+enum StatusImagem { PROCESSANDO PRONTA ERRO }
+
+model ProdutoImagem {
+  id          String       @id @default(cuid())
+  produtoId   String
+  hash        String       // base do nome dos arquivos
+  larguraOrig Int
+  alturaOrig  Int
+  alt         String
+  blurDataUrl String?      // placeholder de 16 px
+  ordem       Int
+  status      StatusImagem @default(PROCESSANDO)
+  removidaEm  DateTime?
+  @@index([produtoId, ordem])
+}
+Com isso, um card do catálogo fica em torno de 15 a 30 KB e a página do produto abaixo de 150 KB de imagens, mesmo com fotos originais de vários megas.
+Integrações
+Toda chamada externa passa pelo pacote integracoes, com timeout, log da requisição e nova tentativa pela fila. Nenhuma tela espera resposta da Focus ou dos Correios. Os caminhos abaixo são os usuais de cada API; confira na documentação oficial antes de codar, porque versões mudam.
+Focus NFe
+• Ambientes: homologação para desenvolvimento e produção depois. Autenticação por token no Basic Auth.
+• Emissão: POST /v2/nfe?ref=REF, /v2/nfce?ref=REF e /v2/nfse?ref=REF. A ref é o id da NotaEmitida, o que torna o reenvio seguro.
+• Consulta e ações: GET /v2/nfe/REF, cancelamento com DELETE e justificativa, carta de correção em /carta_correcao.
+• Notas recebidas: listagem por CNPJ em /v2/nfes_recebidas, manifestação em /v2/nfes_recebidas/CHAVE/manifesto e download do XML.
+• Webhooks: cadastrar o gatilho de retorno de emissão apontando para POST /webhooks/focus. Mesmo com webhook, o worker consulta notas PROCESSANDO há mais de 10 minutos.
+• Pontos de atenção: certificado A1 enviado no painel da Focus; confirmar o provedor de NFS-e do município da cliente; já incluir os campos de IBS e CBS da reforma tributária.
+Correios
+• Credenciais do contrato no portal CWS: token de autenticação pelo cartão de postagem.
+• Preço e prazo: APIs de preço e prazo nacionais por código de serviço (PAC, SEDEX), com peso e dimensões do pacote.
+• Etiqueta: pré-postagem e geração do rótulo em PDF.
+• Rastreio: consulta por código de objeto, guardando cada evento em EnvioEvento.
+• Alternativa sem contrato: Melhor Envio, com a mesma interface no pacote integracoes para trocar sem mexer no resto.
+Pagamento
+• Gateway a definir com a cliente (Mercado Pago, Asaas ou Pagar.me). Pix com QR Code e cartão tokenizado no front, nunca passando o número do cartão pela API.
+• Webhook de pagamento em POST /webhooks/pagamento, com validação de assinatura.
+Regras para todos os webhooks
+1. Validar a origem (assinatura, token ou IP).
+2. Gravar em WebhookEvento e responder 200 imediatamente.
+3. Processar na fila. A chave única origem + chaveExterna impede processar o mesmo evento duas vezes.
+Infraestrutura e deploy
+Tudo roda em uma VPS Hostinger KVM 2 (2 vCPU, 8 GB) com Docker, gerenciado pelo Coolify ou EasyPanel.
+Container
+Função
+Exposto
+loja
+Next.js da loja
+loja.dominio.com.br
+admin
+Next.js do painel
+admin.dominio.com.br
+api
+NestJS
+api.dominio.com.br
+worker
+Filas BullMQ
+Não
+postgres
+Banco
+Não
+redis
+Filas e cache
+Não
+minio
+Arquivos
+Só via URL assinada
+uptime-kuma
+Monitoramento
+status.dominio.com.br (protegido)
+
+
+
+Ambientes: dev local com docker compose, homologacao na mesma VPS apontando para a Focus de homologação, e producao.
+Deploy: push na main dispara GitHub Actions (lint, testes, build), e o Coolify faz o deploy sem derrubar o site. Migrations do Prisma rodam antes da nova versão subir.
+Backup: pg_dump diário e cópia dos XMLs para o Cloudflare R2, retenção de 30 dias para o banco e 5 anos para os XMLs. Teste de restauração uma vez por mês.
+Segurança: Cloudflare na frente, firewall liberando só 80, 443 e SSH por chave, rate limit no login e no checkout, segredos em variáveis de ambiente, nunca no repositório.
+Plano de execução
+São 14 semanas, alinhadas às fases da proposta. Cada fase termina com uma entrega em homologação para a cliente validar.
+Antes de começar
+[ ] Certificado digital A1 da cliente
+[ ] Conta na Focus NFe (homologação liberada)
+[ ] Regime tributário e CFOPs confirmados com a contadora
+[ ] Provedor de NFS-e do município confirmado
+[ ] Contrato com os Correios ou conta no Melhor Envio
+[ ] Gateway de pagamento escolhido e conta aberta
+[ ] Domínio, VPS e Cloudflare
+Semanas 1 a 3 — Base e cadastros
+[ ] Monorepo, Docker, CI e deploy em homologação
+[ ] Schema Prisma, migrations e seed
+[ ] Login, perfis, auditoria
+[ ] Layout do painel com o tema da marca
+[ ] Produtos, fotos, categorias, lotes
+[ ] Serviços e ficha técnica
+[ ] Movimentos de estoque, ajuste manual e saldo
+Semanas 4 a 6 — Fiscal
+[ ] Cliente HTTP da Focus e filas de emissão
+[ ] Notas recebidas: consulta, manifestação, XML
+[ ] Tela de de-para e entrada no estoque
+[ ] Emissão de NF-e, NFC-e e NFS-e com baixa automática
+[ ] Webhook da Focus, cancelamento e carta de correção
+[ ] Exportação de XMLs para a contadora
+Semanas 7 a 9 — Financeiro e vendas no balcão
+[ ] Títulos a pagar gerados pelas notas e a receber pelas vendas
+[ ] Baixa de títulos e lançamentos
+[ ] Caixa diário e fluxo de caixa
+[ ] PDV do balcão e vouchers
+[ ] Painel inicial com indicadores
+Semanas 10 a 13 — Loja e envios
+[ ] Páginas da loja e catálogo
+[ ] Cadastro de cliente, CEP automático, LGPD
+[ ] Carrinho, reserva de estoque e checkout
+[ ] Gateway: Pix, cartão e webhook
+[ ] Frete, etiqueta e rastreio
+[ ] E-mails transacionais e área do cliente
+Semana 14 — Implantação
+[ ] Testes de ponta a ponta (Playwright) dos três fluxos críticos
+[ ] Carga inicial de produtos e saldos
+[ ] Virada da Focus para produção e primeira nota real
+[ ] Treinamento da cliente e da contadora
+[ ] Backup testado e monitoramento ativo
+Riscos e pontos de atenção

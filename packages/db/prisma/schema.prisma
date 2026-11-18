@@ -1,0 +1,757 @@
+generator client {
+  provider = "prisma-client"
+  output = "../src/generated/prisma"
+  moduleFormat = "cjs"
+  importFileExtension = "js"
+}
+datasource db {
+  provider = "postgresql"
+}
+enum Perfil {
+  ADMIN
+  CONTADORA
+  OPERADOR
+}
+model Empresa {
+  id String @id @default(cuid())
+  nome String
+  cnpj String? @unique
+  ativa Boolean @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  usuarios Usuario[]
+  auditoria AuditLog[]
+  sessoes Sessao[]
+  produtos Produto[]
+  categorias Categoria[]
+  imagens ProdutoImagem[]
+  limpezasImagem ImagemLimpeza[]
+  clientes Cliente[]
+  fornecedores Fornecedor[]
+  lotes Lote[]
+  movimentos MovimentoEstoque[]
+  vendas Venda[]
+  vendaItens VendaItem[]
+  contas ContaFinanceira[]
+  titulos TituloFinanceiro[]
+  lancamentos LancamentoFinanceiro[]
+  operacoes OperacaoComercial[]
+  compras Compra[]
+  servicos Servico[]
+  vouchers Voucher[]
+  configuracao ConfiguracaoEmpresa?
+  categoriasFinanceiras CategoriaFinanceira[]
+  fechamentos FechamentoCaixa[]
+  notasRecebidas NotaRecebida[]
+  notasEmitidas NotaEmitida[]
+  pedidosOnline PedidoOnline[]
+}
+model Usuario {
+  id String @id @default(cuid())
+  empresaId String
+  nome String
+  email String
+  senhaHash String
+  perfil Perfil
+  ativo Boolean @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  auditoria AuditLog[]
+  sessoes Sessao[]
+  recuperacoes RecuperacaoSenha[]
+  @@unique([empresaId, email])
+  @@unique([empresaId, id])
+}
+model AuditLog {
+  id String @id @default(cuid())
+  empresaId String
+  usuarioId String?
+  acao String
+  entidade String
+  entidadeId String
+  dados Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  usuario Usuario? @relation(fields: [empresaId, usuarioId], references: [empresaId, id], onDelete: Restrict)
+  @@index([empresaId, createdAt])
+  @@index([empresaId, entidade, entidadeId])
+}
+
+model Sessao {
+  id String @id @default(cuid())
+  empresaId String
+  usuarioId String
+  tokenHash String @unique
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  usuario Usuario @relation(fields: [empresaId, usuarioId], references: [empresaId, id], onDelete: Restrict)
+  @@index([empresaId, usuarioId])
+  @@index([expiresAt])
+}
+
+enum TipoProduto {
+  REVENDA
+  INSUMO
+  AMBOS
+}
+
+model Categoria {
+  id String @id @default(cuid())
+  empresaId String
+  nome String
+  nomeChave String
+  ativa Boolean @default(true)
+  versao Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  produtos Produto[]
+  @@unique([empresaId, id])
+  @@unique([empresaId, nomeChave])
+}
+
+model Produto {
+  id String @id @default(cuid())
+  empresaId String
+  nome String
+  descricao String?
+  sku String
+  tipo TipoProduto @default(REVENDA)
+  unidade String
+  precoVenda Decimal @db.Decimal(12,2)
+  custoCompra Decimal? @db.Decimal(12,4)
+  estoqueMinimo Decimal @default(0) @db.Decimal(12,3)
+  custoMedio Decimal? @default(0) @db.Decimal(12,4)
+  valorEstoque Decimal? @default(0) @db.Decimal(28,7)
+  categoriaId String?
+  ativo Boolean @default(true)
+  versao Int @default(1)
+  galeriaVersao Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  categoria Categoria? @relation(fields: [empresaId, categoriaId], references: [empresaId, id], onDelete: Restrict)
+  imagens ProdutoImagem[]
+  lotes Lote[]
+  movimentos MovimentoEstoque[]
+  vendaItens VendaItem[]
+  compraItens CompraItem[]
+  insumos ServicoInsumo[]
+  complemento ProdutoComplemento?
+  reservas ReservaEstoque[]
+  @@unique([empresaId, id])
+  @@unique([empresaId, sku])
+  @@index([empresaId, ativo, nome])
+  @@index([empresaId, categoriaId])
+}
+
+enum StatusImagem {
+  AGUARDANDO_UPLOAD
+  PROCESSANDO
+  PRONTA
+  ERRO
+}
+
+model ProdutoImagem {
+  id String @id @default(cuid())
+  empresaId String
+  produtoId String
+  alt String
+  ordem Int
+  status StatusImagem @default(AGUARDANDO_UPLOAD)
+  hash String?
+  larguraOrig Int?
+  alturaOrig Int?
+  blurDataUrl String?
+  mensagem String?
+  tentativaId String
+  uploadKey String
+  tamanhoEsperado Int
+  tipoInformado String
+  altPendente String?
+  etagUpload String?
+  uploadLimpoEm DateTime? @db.Timestamptz(3)
+  prefixoAtual String?
+  formatos Json?
+  removidaEm DateTime? @db.Timestamptz(3)
+  limpezaIniciadaEm DateTime? @db.Timestamptz(3)
+  arquivosRemovidosEm DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  tentativaEm DateTime @default(now()) @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  produto Produto @relation(fields: [empresaId, produtoId], references: [empresaId, id], onDelete: Restrict)
+  limpezas ImagemLimpeza[]
+  @@unique([empresaId, id])
+  @@index([empresaId, produtoId, removidaEm, ordem])
+  @@index([status, updatedAt])
+  @@index([removidaEm, arquivosRemovidosEm])
+}
+
+model ImagemLimpeza {
+  id String @id @default(cuid())
+  empresaId String
+  imagemId String
+  prefixo String @unique
+  excluirApos DateTime @db.Timestamptz(3)
+  concluidaEm DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  imagem ProdutoImagem @relation(fields: [empresaId, imagemId], references: [empresaId, id], onDelete: Restrict)
+  @@index([excluirApos, concluidaEm])
+}
+
+model Cliente {
+  id String @id @default(cuid())
+  empresaId String
+  nome String
+  cpfCnpj String?
+  email String?
+  telefone String?
+  ativo Boolean @default(true)
+  versao Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  vendas Venda[]
+  titulos TituloFinanceiro[]
+  @@unique([empresaId, id])
+  @@unique([empresaId, cpfCnpj])
+  @@index([empresaId, ativo, nome])
+}
+
+model Fornecedor {
+  id String @id @default(cuid())
+  empresaId String
+  nome String
+  cpfCnpj String
+  email String?
+  telefone String?
+  ativo Boolean @default(true)
+  versao Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  titulos TituloFinanceiro[]
+  compras Compra[]
+  @@unique([empresaId, id])
+  @@unique([empresaId, cpfCnpj])
+  @@index([empresaId, ativo, nome])
+}
+
+model Lote {
+  id String @id @default(cuid())
+  empresaId String
+  produtoId String
+  numero String
+  validade DateTime? @db.Date
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  produto Produto @relation(fields: [empresaId, produtoId], references: [empresaId, id], onDelete: Restrict)
+  movimentos MovimentoEstoque[]
+  @@unique([empresaId, produtoId, id])
+  @@unique([empresaId, produtoId, numero])
+  @@index([empresaId, validade])
+}
+
+enum TipoMovimentoEstoque {
+  ENTRADA
+  SAIDA
+  AJUSTE
+  ESTORNO
+}
+
+model MovimentoEstoque {
+  id String @id @default(cuid())
+  empresaId String
+  produtoId String
+  loteId String?
+  tipo TipoMovimentoEstoque
+  quantidade Decimal @db.Decimal(12,3)
+  custoUnitario Decimal? @db.Decimal(12,4)
+  valorMovimento Decimal? @db.Decimal(28,7)
+  motivo String
+  chaveOperacao String
+  estornoDeId String?
+  vendaId String?
+  origemTipo String?
+  origemId String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  venda Venda? @relation(fields: [empresaId, vendaId], references: [empresaId, id], onDelete: Restrict)
+  produto Produto @relation(fields: [empresaId, produtoId], references: [empresaId, id], onDelete: Restrict)
+  lote Lote? @relation(fields: [empresaId, produtoId, loteId], references: [empresaId, produtoId, id], onDelete: Restrict)
+  estornoDe MovimentoEstoque? @relation("Estorno", fields: [empresaId, produtoId, estornoDeId], references: [empresaId, produtoId, id], onDelete: Restrict)
+  estornos MovimentoEstoque[] @relation("Estorno")
+  @@unique([empresaId, produtoId, id])
+  @@unique([empresaId, chaveOperacao])
+  @@unique([empresaId, estornoDeId])
+  @@index([empresaId, produtoId, loteId, createdAt])
+  @@index([empresaId, vendaId])
+}
+
+enum StatusVenda {
+  CONFIRMADA
+  CANCELADA
+}
+enum TipoTituloFinanceiro {
+  PAGAR
+  RECEBER
+}
+enum FormaFinanceira {
+  DINHEIRO
+  PIX
+  CARTAO_CREDITO
+  CARTAO_DEBITO
+  TRANSFERENCIA
+  BOLETO
+}
+model Venda {
+  id String @id @default(cuid())
+  numero Int @unique @default(autoincrement())
+  empresaId String
+  clienteId String?
+  clienteNome String?
+  status StatusVenda @default(CONFIRMADA)
+  subtotal Decimal @db.Decimal(12,2)
+  desconto Decimal @default(0) @db.Decimal(12,2)
+  frete Decimal @default(0) @db.Decimal(12,2)
+  total Decimal @db.Decimal(12,2)
+  observacao String?
+  canceladaEm DateTime? @db.Timestamptz(3)
+  motivoCancelamento String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  cliente Cliente? @relation(fields: [empresaId, clienteId], references: [empresaId, id], onDelete: Restrict)
+  itens VendaItem[]
+  movimentos MovimentoEstoque[]
+  titulo TituloFinanceiro?
+  @@unique([empresaId, id])
+  @@index([empresaId, createdAt])
+}
+model VendaItem {
+  id String @id @default(cuid())
+  empresaId String
+  vendaId String
+  produtoId String
+  nome String
+  sku String
+  unidade String
+  quantidade Decimal @db.Decimal(12,3)
+  precoUnitario Decimal @db.Decimal(12,2)
+  total Decimal @db.Decimal(12,2)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  venda Venda @relation(fields: [empresaId, vendaId], references: [empresaId, id], onDelete: Restrict)
+  produto Produto @relation(fields: [empresaId, produtoId], references: [empresaId, id], onDelete: Restrict)
+  @@unique([empresaId, vendaId, produtoId])
+}
+model ContaFinanceira {
+  id String @id @default(cuid())
+  empresaId String
+  nome String
+  nomeChave String
+  tipo String
+  ativa Boolean @default(true)
+  versao Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  lancamentos LancamentoFinanceiro[]
+  @@unique([empresaId, id])
+  @@unique([empresaId, nomeChave])
+}
+model TituloFinanceiro {
+  id String @id @default(cuid())
+  empresaId String
+  tipo TipoTituloFinanceiro
+  descricao String
+  valor Decimal @db.Decimal(12,2)
+  vencimento DateTime @db.Date
+  clienteId String?
+  fornecedorId String?
+  vendaId String?
+  origemTipo String?
+  origemId String?
+  categoriaId String?
+  parcela Int @default(1)
+  totalParcelas Int @default(1)
+  canceladoEm DateTime? @db.Timestamptz(3)
+  motivoCancelamento String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  cliente Cliente? @relation(fields: [empresaId, clienteId], references: [empresaId, id], onDelete: Restrict)
+  fornecedor Fornecedor? @relation(fields: [empresaId, fornecedorId], references: [empresaId, id], onDelete: Restrict)
+  venda Venda? @relation(fields: [empresaId, vendaId], references: [empresaId, id], onDelete: Restrict)
+  lancamentos LancamentoFinanceiro[]
+  categoria CategoriaFinanceira? @relation(fields: [empresaId, categoriaId], references: [empresaId, id], onDelete: Restrict)
+  @@unique([empresaId, id])
+  @@unique([empresaId, vendaId])
+  @@index([empresaId, vencimento])
+}
+model LancamentoFinanceiro {
+  id String @id @default(cuid())
+  empresaId String
+  tituloId String
+  contaId String
+  valor Decimal @db.Decimal(12,2)
+  forma FormaFinanceira
+  data DateTime @db.Date
+  motivo String
+  estornoDeId String?
+  conciliadoEm DateTime? @db.Timestamptz(3)
+  referenciaExterna String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  titulo TituloFinanceiro @relation(fields: [empresaId, tituloId], references: [empresaId, id], onDelete: Restrict)
+  conta ContaFinanceira @relation(fields: [empresaId, contaId], references: [empresaId, id], onDelete: Restrict)
+  estornoDe LancamentoFinanceiro? @relation("EstornoFinanceiro", fields: [empresaId, estornoDeId], references: [empresaId, id], onDelete: Restrict)
+  estornos LancamentoFinanceiro[] @relation("EstornoFinanceiro")
+  @@unique([empresaId, id])
+  @@unique([empresaId, estornoDeId])
+  @@index([empresaId, tituloId])
+  @@index([empresaId, contaId, data])
+}
+
+enum StatusCompra {
+  CONFIRMADA
+  CANCELADA
+}
+model Compra {
+  id String @id @default(cuid())
+  empresaId String
+  fornecedorId String
+  numero String
+  chaveNota String?
+  emitidaEm DateTime @db.Date
+  total Decimal @db.Decimal(12,2)
+  despesas Decimal @default(0) @db.Decimal(12,2)
+  desconto Decimal @default(0) @db.Decimal(12,2)
+  status StatusCompra @default(CONFIRMADA)
+  observacao String?
+  canceladaEm DateTime? @db.Timestamptz(3)
+  motivoCancelamento String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  fornecedor Fornecedor @relation(fields: [empresaId, fornecedorId], references: [empresaId, id], onDelete: Restrict)
+  itens CompraItem[]
+  @@unique([empresaId, id])
+  @@unique([empresaId, chaveNota])
+  @@unique([empresaId, fornecedorId, numero])
+  @@index([empresaId, createdAt])
+}
+model CompraItem {
+  id String @id @default(cuid())
+  empresaId String
+  compraId String
+  produtoId String
+  codigoFornecedor String
+  descricao String
+  quantidade Decimal @db.Decimal(12,3)
+  fatorConversao Decimal @db.Decimal(12,3)
+  custoUnitario Decimal @db.Decimal(12,4)
+  total Decimal @db.Decimal(12,2)
+  loteId String?
+  compra Compra @relation(fields: [empresaId, compraId], references: [empresaId, id], onDelete: Restrict)
+  produto Produto @relation(fields: [empresaId, produtoId], references: [empresaId, id], onDelete: Restrict)
+  @@index([empresaId, compraId])
+}
+model VinculoFornecedorProduto {
+  empresaId String
+  fornecedorId String
+  codigoFornecedor String
+  produtoId String
+  fatorConversao Decimal @db.Decimal(12,3)
+  @@id([empresaId, fornecedorId, codigoFornecedor])
+}
+model Servico {
+  id String @id @default(cuid())
+  empresaId String
+  nome String
+  descricao String?
+  preco Decimal @db.Decimal(12,2)
+  duracaoMin Int
+  codigoMunicipal String?
+  codigoListaServico String?
+  aliquotaIss Decimal? @db.Decimal(7,4)
+  publicadoLoja Boolean @default(false)
+  validadeDias Int @default(365)
+  ativo Boolean @default(true)
+  versao Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  insumos ServicoInsumo[]
+  vouchers Voucher[]
+  @@unique([empresaId, id])
+  @@index([empresaId, ativo, nome])
+}
+model ServicoInsumo {
+  empresaId String
+  servicoId String
+  produtoId String
+  quantidade Decimal @db.Decimal(12,3)
+  servico Servico @relation(fields: [empresaId, servicoId], references: [empresaId, id], onDelete: Restrict)
+  produto Produto @relation(fields: [empresaId, produtoId], references: [empresaId, id], onDelete: Restrict)
+  @@id([empresaId, servicoId, produtoId])
+}
+enum StatusVoucher {
+  ATIVO
+  USADO
+  CANCELADO
+}
+model Voucher {
+  id String @id @default(cuid())
+  empresaId String
+  servicoId String
+  clienteId String
+  codigo String @unique
+  servicoNome String
+  valor Decimal @db.Decimal(12,2)
+  ficha Json
+  validoAte DateTime @db.Date
+  status StatusVoucher @default(ATIVO)
+  usadoEm DateTime? @db.Timestamptz(3)
+  canceladoEm DateTime? @db.Timestamptz(3)
+  motivo String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  servico Servico @relation(fields: [empresaId, servicoId], references: [empresaId, id], onDelete: Restrict)
+  @@unique([empresaId, id])
+  @@index([empresaId, clienteId])
+}
+model ConfiguracaoEmpresa {
+  empresaId String @id
+  razaoSocial String?
+  inscricaoEstadual String?
+  inscricaoMunicipal String?
+  regimeTributario String?
+  endereco Json?
+  email String?
+  telefone String?
+  cepOrigem String?
+  serieNfe Int @default(1)
+  serieNfce Int @default(1)
+  ambienteFiscal String @default("homologacao")
+  versao Int @default(1)
+  integracoes Json?
+  freteGratisAtivo Boolean @default(false)
+  freteGratisMinimo Decimal @default(0) @db.Decimal(12,2)
+  correiosAtivo Boolean @default(false)
+  contaOnlineId String?
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+}
+
+model RecuperacaoSenha {
+  id String @id @default(cuid())
+  usuarioId String
+  tokenHash String @unique
+  expiresAt DateTime @db.Timestamptz(3)
+  usadaEm DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+}
+model ProdutoComplemento {
+  produtoId String @id
+  empresaId String
+  ncm String?
+  cest String?
+  ean String?
+  cfopVenda String?
+  origem Int @default(0)
+  csosn String?
+  cst String?
+  aliquotaIcms Decimal? @db.Decimal(7,4)
+  aliquotaIbs Decimal? @db.Decimal(7,4)
+  aliquotaCbs Decimal? @db.Decimal(7,4)
+  cstIbsCbs String?
+  classificacaoIbsCbs String?
+  aliquotaIbsMunicipal Decimal? @db.Decimal(7,4)
+  cfopInterestadual String?
+  cstPis String?
+  cstCofins String?
+  aliquotaPis Decimal? @db.Decimal(7,4)
+  aliquotaCofins Decimal? @db.Decimal(7,4)
+  pesoGramas Int?
+  alturaCm Int?
+  larguraCm Int?
+  comprimentoCm Int?
+  publicadoLoja Boolean @default(false)
+  slug String
+  versao Int @default(1)
+  produto Produto @relation(fields: [empresaId, produtoId], references: [empresaId, id], onDelete: Restrict)
+  @@unique([empresaId, slug])
+  @@unique([empresaId, produtoId])
+}
+model NotaRecebida {
+  id String @id @default(cuid())
+  empresaId String
+  chave String
+  numero String
+  fornecedorNome String
+  fornecedorDocumento String
+  emitidaEm DateTime @db.Date
+  valorTotal Decimal @db.Decimal(12,2)
+  versaoFocus BigInt @default(0)
+  status String @default("NOVA")
+  xml String?
+  dados Json
+  compraId String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  @@unique([empresaId, chave])
+  @@unique([empresaId, id])
+}
+model NotaEmitida {
+  id String @id @default(cuid())
+  empresaId String
+  vendaId String?
+  voucherId String?
+  modelo String
+  status String @default("PENDENTE")
+  payload Json
+  retorno Json?
+  xml String?
+  danfeUrl String?
+  mensagem String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  @@unique([empresaId, id])
+  @@index([empresaId, createdAt])
+}
+model IntegracaoJob {
+  id String @id @default(cuid())
+  empresaId String
+  tipo String
+  referencia String
+  payload Json
+  status String @default("PENDENTE")
+  tentativas Int @default(0)
+  proximaEm DateTime @default(now()) @db.Timestamptz(3)
+  bloqueadoAte DateTime? @db.Timestamptz(3)
+  bloqueioToken String?
+  erro String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([status, proximaEm])
+  @@unique([empresaId, tipo, referencia])
+}
+model WebhookEvento {
+  id String @id @default(cuid())
+  origem String
+  chaveExterna String
+  payload Json
+  processadoEm DateTime? @db.Timestamptz(3)
+  tentativas Int @default(0)
+  proximaEm DateTime @default(now()) @db.Timestamptz(3)
+  erro String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@unique([origem, chaveExterna])
+}
+model ContaCliente {
+  id String @id @default(cuid())
+  empresaId String
+  clienteId String
+  email String
+  senhaHash String
+  consentimentoEm DateTime @db.Timestamptz(3)
+  excluidaEm DateTime? @db.Timestamptz(3)
+  recuperacaoHash String? @unique
+  recuperacaoAte DateTime? @db.Timestamptz(3)
+  sessoes SessaoCliente[]
+  @@unique([empresaId, email])
+  @@unique([empresaId, clienteId])
+  @@unique([empresaId, id])
+}
+model SessaoCliente {
+  id String @id @default(cuid())
+  contaId String
+  tokenHash String @unique
+  expiresAt DateTime @db.Timestamptz(3)
+  conta ContaCliente @relation(fields: [contaId], references: [id], onDelete: Restrict)
+}
+model PedidoOnline {
+  id String @id @default(cuid())
+  numero Int @unique @default(autoincrement())
+  empresaId String
+  clienteId String
+  chaveOperacao String
+  hashOperacao String
+  status String @default("AGUARDANDO_PAGAMENTO")
+  itens Json
+  endereco Json
+  subtotal Decimal @db.Decimal(12,2)
+  frete Decimal @db.Decimal(12,2)
+  total Decimal @db.Decimal(12,2)
+  servicoFrete String
+  prazoDias Int?
+  gateway String
+  gatewayId String?
+  checkoutUrl String?
+  pagamentoId String? @unique
+  vendaId String? @unique
+  expiresAt DateTime @db.Timestamptz(3)
+  pagoEm DateTime? @db.Timestamptz(3)
+  rastreio String?
+  etiquetaUrl String?
+  envio Json?
+  eventos Json?
+  cpfNaNota Boolean @default(false)
+  notaPorEmail Boolean @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  reservas ReservaEstoque[]
+  @@unique([empresaId, chaveOperacao])
+  @@unique([empresaId, id])
+  @@index([empresaId, clienteId])
+}
+model ReservaEstoque {
+  id String @id @default(cuid())
+  empresaId String
+  pedidoId String
+  produtoId String
+  quantidade Decimal @db.Decimal(12,3)
+  expiresAt DateTime @db.Timestamptz(3)
+  pedido PedidoOnline @relation(fields: [empresaId, pedidoId], references: [empresaId, id], onDelete: Restrict)
+  produto Produto @relation(fields: [empresaId, produtoId], references: [empresaId, id], onDelete: Restrict)
+  @@unique([empresaId, pedidoId, produtoId])
+  @@index([empresaId, produtoId, expiresAt])
+}
+model CategoriaFinanceira {
+  id String @id @default(cuid())
+  empresaId String
+  nome String
+  nomeChave String
+  tipo TipoTituloFinanceiro
+  ativa Boolean @default(true)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  titulos TituloFinanceiro[]
+  @@unique([empresaId, id])
+  @@unique([empresaId, tipo, nomeChave])
+}
+model FechamentoCaixa {
+  id String @id @default(cuid())
+  empresaId String
+  contaId String
+  data DateTime @db.Date
+  saldoEsperado Decimal @db.Decimal(18,2)
+  saldoContado Decimal @db.Decimal(18,2)
+  diferenca Decimal @db.Decimal(18,2)
+  observacao String
+  usuarioId String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  @@unique([empresaId, contaId, data])
+}
+model OperacaoComercial {
+  id String @id @default(cuid())
+  empresaId String
+  chave String
+  hash String
+  acao String
+  resultadoId String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  @@unique([empresaId, chave])
+}
+

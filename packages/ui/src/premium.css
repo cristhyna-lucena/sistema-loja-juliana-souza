@@ -1,0 +1,4 @@
+/* Fundação comum: loja e gestão compartilham a identidade, não as regras de layout. */
+@font-face{font-family:Allura;src:url('/fonts/Allura-Regular.ttf') format('truetype');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:Montserrat;src:url('/fonts/Montserrat-Variable.ttf') format('truetype');font-weight:100 900;font-style:normal;font-display:swap}
+:root{color-scheme:light;--petal:#FDE7ED;--rose-light:#FBD6E2;--rose:#F8C1D1;--rose-strong:#E9A0B7;--gold:#D4A017;--gold-deep:#96713C;--cream:#FFF8F4;--pink:#A15C76;--berry:#a52653;--ink:#665E65;--muted:#74646d;--line:#ecd2d9;--font-body:Montserrat,Lato,Arial,sans-serif;--font-script:Allura,cursive;--gold-gradient:linear-gradient(120deg,#d4a643,#b17b21 65%,#96713c);--rose-gradient:linear-gradient(115deg,#d8557e,#a52653);--shadow:0 8px 30px #973e5c0b}

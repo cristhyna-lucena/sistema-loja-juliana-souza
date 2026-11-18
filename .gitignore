@@ -1,0 +1,27 @@
+node_modules/
+.next/
+dist/
+.turbo/
+.env
+.env.*
+!.env.example
+coverage/
+*.log
+*.tsbuildinfo
+packages/db/src/generated/
+artifacts/
+playwright-report/
+test-results/
+tmp/
+
+
+# Dados e registros privados da instalação
+CONTINUIDADE.md
+output/finalizacao/DADOS-EMPRESA-*.md
+output/finalizacao/prontidao.json
+*.dump
+*.bak
+*.pem
+*.key
+*.pfx
+*.p12

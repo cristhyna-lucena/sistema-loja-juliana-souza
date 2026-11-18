@@ -1,0 +1,22 @@
+{
+  "name": "@sistema/loja",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1 --port 3000",
+    "build": "next build",
+    "start": "node --import ../../infra/production-env.mjs node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3000",
+    "typecheck": "next typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "@sistema/shared": "workspace:*",
+    "@sistema/ui": "workspace:*",
+    "next": "16.4.5",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0"
+  }
+}

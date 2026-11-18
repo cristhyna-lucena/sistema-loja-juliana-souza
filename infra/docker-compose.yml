@@ -1,0 +1,52 @@
+name: sistema-loja-local
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: sistema_loja
+      POSTGRES_USER: sistema_loja
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Execute infra:env}
+    ports: ["127.0.0.1:${POSTGRES_PORT:-5433}:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sistema_loja -d sistema_loja"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Execute infra:env}
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?Execute infra:env}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    ports: ["127.0.0.1:${REDIS_PORT:-6380}:6379"]
+    volumes: ["redis_data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  minio:
+    build:
+      context: ./minio
+    image: sistema-loja-minio:7aac2a2
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Execute media:env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Execute media:env}
+      MINIO_API_CORS_ALLOW_ORIGIN: "${ADMIN_ORIGIN:-http://127.0.0.1:3001},http://127.0.0.1:43159"
+    ports: ["127.0.0.1:${MINIO_PORT:-19000}:9000", "127.0.0.1:${MINIO_CONSOLE_PORT:-19001}:9001"]
+    volumes: ["minio_data:/data"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+volumes:
+  minio_data:
+  postgres_data:
+  redis_data:
+

@@ -5,3 +5,4 @@ export * from "./correios";
 export * from "./xml";
 export * from "./jobs";
 
+export * from "./sefaz";

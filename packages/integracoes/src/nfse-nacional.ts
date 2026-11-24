@@ -86,6 +86,8 @@ function conferir(d: DadosDps) {
   if (d.valores.aliquotaIss && !/^\d{1,2}\.\d{2}$/.test(d.valores.aliquotaIss)) erros.push("alíquota do ISS (ex.: 2.00)");
   if (d.valores.percentualTributosMunicipais && !/^\d{1,2}\.\d{2}$/.test(d.valores.percentualTributosMunicipais)) erros.push("percentual de tributos (ex.: 2.00)");
   if (d.servico.descricao.trim().length < 1) erros.push("descrição do serviço");
+  // E0625 (confirmado em produção, 24/11/2026): ME/EPP do Simples sem retenção não informa alíquota (o ISS vai no DAS).
+  if (d.prestador.opcaoSimples === 3 && d.valores.aliquotaIss) erros.push("alíquota: ME/EPP do Simples sem retenção não informa alíquota (use o percentual de tributos)");
   const doc = d.tomador ? somenteDigitos(d.tomador.documento) : "";
   if (d.tomador && doc.length !== 11 && doc.length !== 14) erros.push("CPF ou CNPJ do tomador");
   if (erros.length) throw new IntegrationError("NFS-e (" + erros.join(", ") + ")", 422, false);

@@ -23,7 +23,7 @@ const DADOS = {
   numero: { serie: "1", numero: 7, emitidaEm: AGORA },
   tomador: { documento: "529.982.247-25", nome: "Maria & Filhos <teste>" },
   servico: { codigoMunicipioPrestacao: "5108600", codigoTributacaoNacional: "060301", codigoNbs: "126021000", descricao: "Drenagem linfática - 1 sessão" },
-  valores: { valorServico: "150.00", aliquotaIss: "2.00" },
+  valores: { valorServico: "150.00", percentualTributosMunicipais: "2.00" },
 };
 
 test("Id e horário da DPS no formato do leiaute", () => {
@@ -39,7 +39,7 @@ test("DPS de ME/EPP do Simples na homologação (leiaute novo): ordem dos grupos
   assert.match(xml, /<prest><CNPJ>00000000000191<\/CNPJ><IM>123<\/IM><regTrib><opSimpNac>3<\/opSimpNac><regApTribSN>1<\/regApTribSN><regEspTrib>0<\/regEspTrib><\/regTrib><\/prest>/);
   assert.match(xml, /<toma><CPF>52998224725<\/CPF><xNome>Maria &amp; Filhos &lt;teste&gt;<\/xNome><\/toma>/);
   assert.match(xml, /<cServ><cTribNac>060301<\/cTribNac><cNBS>126021000<\/cNBS><xDescServ>Drenagem linfática - 1 sessão<\/xDescServ><\/cServ>/);
-  assert.match(xml, /<valores><vServPrest><vServ>150.00<\/vServ><\/vServPrest><trib><tribMun><tribISSQN>1<\/tribISSQN><tpRetISSQN>1<\/tpRetISSQN><pAliq>2.00<\/pAliq><\/tribMun><totTrib><pTotTrib><pTotTribFed>0.00<\/pTotTribFed><pTotTribEst>0.00<\/pTotTribEst><pTotTribMun>2.00<\/pTotTribMun><\/pTotTrib><\/totTrib><\/trib><\/valores>/);
+  assert.match(xml, /<valores><vServPrest><vServ>150.00<\/vServ><\/vServPrest><trib><tribMun><tribISSQN>1<\/tribISSQN><tpRetISSQN>1<\/tpRetISSQN><\/tribMun><totTrib><pTotTrib><pTotTribFed>0.00<\/pTotTribFed><pTotTribEst>0.00<\/pTotTribEst><pTotTribMun>2.00<\/pTotTribMun><\/pTotTrib><\/totTrib><\/trib><\/valores>/);
 });
 
 test("produção usa o leiaute vigente: sem finNFSe e com a descrição antes do cNBS", () => {
@@ -47,8 +47,10 @@ test("produção usa o leiaute vigente: sem finNFSe e com a descrição antes do
   assert.match(xml, /<tpAmb>1<\/tpAmb>/);
   assert.doesNotMatch(xml, /finNFSe/);
   assert.match(xml, /<xDescServ>[^<]+<\/xDescServ><cNBS>126021000<\/cNBS>/);
-  // Mesma ordem da NFS-e real do emissor web em produção: retenção antes da alíquota.
-  assert.match(xml, /<tribMun><tribISSQN>1<\/tribISSQN><tpRetISSQN>1<\/tpRetISSQN><pAliq>2.00<\/pAliq><\/tribMun>/);
+  // ME/EPP sem retenção: sem alíquota (E0625); prestador fora do Simples informa, com a retenção antes da alíquota.
+  assert.throws(() => montarDps({ ...DADOS, valores: { valorServico: "10.00", aliquotaIss: "2.00" } }, AGORA), /E0625|não informa alíquota/);
+  const naoOptante = montarDps({ ...DADOS, ambiente: "producao", prestador: { ...DADOS.prestador, opcaoSimples: 1 }, valores: { valorServico: "10.00", aliquotaIss: "2.00" } }, AGORA).xml;
+  assert.match(naoOptante, /<tribMun><tribISSQN>1<\/tribISSQN><tpRetISSQN>1<\/tpRetISSQN><pAliq>2.00<\/pAliq><\/tribMun>/);
   const semAliquota = montarDps({ ...DADOS, ambiente: "producao", valores: { valorServico: "10.00" } }, AGORA).xml;
   assert.match(semAliquota, /<totTrib><indTotTrib>0<\/indTotTrib><\/totTrib>/);
   // Sem retenção em município conveniado: sem pAliq, com o percentual informativo de tributos.

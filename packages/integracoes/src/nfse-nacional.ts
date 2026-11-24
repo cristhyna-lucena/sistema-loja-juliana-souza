@@ -239,3 +239,60 @@ export async function consultarConvenioMunicipio(ambiente: AmbienteFiscal, codig
   const r = await envio("GET", `${urlAdn(ambiente)}/parametrizacao/${codigoMunicipio}/convenio`, null, certificado);
   return { status: r.status, corpo: r.corpo.slice(0, 4000) };
 }
+
+/** Motivos de cancelamento da NFS-e Nacional. */
+export const MOTIVOS_CANCELAMENTO_NFSE = { erroEmissao: "1", servicoNaoPrestado: "2", outros: "9" } as const;
+
+/** Pedido de registro do evento 101101 (cancelamento), sem assinatura. */
+export function montarCancelamentoNfse(opcoes: {
+  ambiente: AmbienteFiscal;
+  cnpj: string;
+  chave: string;
+  motivo: keyof typeof MOTIVOS_CANCELAMENTO_NFSE;
+  justificativa: string;
+  agora: Date;
+}) {
+  const cnpj = somenteDigitos(opcoes.cnpj);
+  const justificativa = opcoes.justificativa.trim();
+  if (cnpj.length !== 14 || !/^\d{50}$/.test(opcoes.chave) || !MOTIVOS_CANCELAMENTO_NFSE[opcoes.motivo])
+    throw new IntegrationError("NFS-e (cancelamento: CNPJ, chave de 50 dígitos ou motivo)", 422, false);
+  if (justificativa.length < 15 || justificativa.length > 200)
+    throw new IntegrationError("NFS-e (justificativa de 15 a 200 caracteres)", 422, false);
+  const id = `PRE${opcoes.chave}101101`;
+  const xml =
+    `<pedRegEvento xmlns="${NFSE_NAMESPACE}" versao="1.01"><infPedReg Id="${id}">` +
+    tag("tpAmb", producao(opcoes.ambiente) ? "1" : "2") + tag("verAplic", "sistema-loja-1.0") +
+    tag("dhEvento", horarioDps(opcoes.agora).dhEmi) + tag("CNPJAutor", cnpj) + tag("chNFSe", opcoes.chave) +
+    tag("e101101", tag("xDesc", "Cancelamento de NFS-e") + tag("cMotivo", MOTIVOS_CANCELAMENTO_NFSE[opcoes.motivo]) + tag("xMotivo", textoLivre(justificativa, 200))) +
+    `</infPedReg></pedRegEvento>`;
+  return { id, xml };
+}
+
+/** Cancela a NFS-e: evento assinado enviado para a chave. Devolve o XML do evento registrado ou os erros. */
+export async function cancelarNfse(
+  opcoes: Parameters<typeof montarCancelamentoNfse>[0],
+  certificado: CertificadoA1,
+  envio: EnvioHttps = enviarHttps,
+): Promise<{ ok: true; xml: string } | { ok: false; erros: { codigo: string; descricao: string }[] }> {
+  const { xml } = montarCancelamentoNfse(opcoes);
+  const assinado = `<?xml version="1.0" encoding="UTF-8"?>` + assinarXml(xml, "infPedReg", certificado);
+  const r = await envio(
+    "POST",
+    `${urlSefin(opcoes.ambiente)}/nfse/${opcoes.chave}/eventos`,
+    JSON.stringify({ pedidoRegistroEventoXmlGZipB64: gzipB64(assinado) }),
+    certificado,
+  );
+  if (r.status === 401 || r.status === 403) throw new IntegrationError("SEFIN Nacional (certificado recusado: vencido ou inválido)", r.status, false);
+  if (r.status >= 500) throw new IntegrationError("SEFIN Nacional", r.status, true);
+  let json: Record<string, unknown>;
+  try {
+    json = JSON.parse(r.corpo) as Record<string, unknown>;
+  } catch {
+    throw new IntegrationError(`SEFIN Nacional (resposta não JSON, HTTP ${r.status})`, 502, true);
+  }
+  const campo = Object.keys(json).find((k) => k.endsWith("XmlGZipB64") && typeof json[k] === "string");
+  if (campo) return { ok: true, xml: deGzipB64(String(json[campo])) };
+  const lido = lerRespostaSefin({ status: r.status, corpo: r.corpo });
+  if (!lido.ok) return lido;
+  throw new IntegrationError(`SEFIN Nacional (resposta inesperada ao cancelar, HTTP ${r.status})`, 502, false);
+}

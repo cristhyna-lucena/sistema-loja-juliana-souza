@@ -85,3 +85,28 @@ test("resposta com erros de validação vira lista legível; 403 é certificado 
   assert.throws(() => lerRespostaSefin({ status: 403, corpo: "<html>" }), (e) => e.retryable === false && /certificado recusado/.test(e.provider));
   assert.throws(() => lerRespostaSefin({ status: 503, corpo: "" }), (e) => e.retryable === true);
 });
+
+test("cancelamento: evento 101101 com Id PRE+chave+tipo, motivo e justificativa; assinatura válida; leitura do retorno", async () => {
+  const { cancelarNfse, montarCancelamentoNfse } = await import("../dist/index.js");
+  const CHAVE = "5".repeat(50);
+  const base = { ambiente: "homologacao", cnpj: "00000000000191", chave: CHAVE, motivo: "erroEmissao", justificativa: "Nota emitida em teste de integração", agora: AGORA };
+  const { id, xml } = montarCancelamentoNfse(base);
+  assert.equal(id, `PRE${CHAVE}101101`);
+  assert.match(xml, /<tpAmb>2<\/tpAmb><verAplic>[^<]+<\/verAplic><dhEvento>2026-11-24T10:29:00-03:00<\/dhEvento><CNPJAutor>00000000000191<\/CNPJAutor><chNFSe>5{50}<\/chNFSe>/);
+  assert.match(xml, /<e101101><xDesc>Cancelamento de NFS-e<\/xDesc><cMotivo>1<\/cMotivo><xMotivo>Nota emitida em teste de integração<\/xMotivo><\/e101101>/);
+  assert.throws(() => montarCancelamentoNfse({ ...base, justificativa: "curta" }), /justificativa/);
+  let pedido;
+  const r = await cancelarNfse(base, CERT, async (metodo, url, corpo) => {
+    pedido = { metodo, url, corpo };
+    return { status: 201, corpo: JSON.stringify({ eventoXmlGZipB64: gzipSync("<evento>ok</evento>").toString("base64") }) };
+  });
+  assert.equal(pedido.url, `https://sefin.producaorestrita.nfse.gov.br/SefinNacional/nfse/${CHAVE}/eventos`);
+  const enviado = gunzipSync(Buffer.from(JSON.parse(pedido.corpo).pedidoRegistroEventoXmlGZipB64, "base64")).toString("utf8");
+  assert.match(enviado, /^<\?xml version="1.0" encoding="UTF-8"\?><pedRegEvento /);
+  const conferir = new SignedXml({ publicCert: CERT.certificadoPem });
+  conferir.loadSignature(enviado.match(/<Signature[\s\S]*<\/Signature>/)[0]);
+  assert.equal(conferir.checkSignature(enviado), true);
+  assert.deepEqual(r, { ok: true, xml: "<evento>ok</evento>" });
+  const recusa = await cancelarNfse(base, CERT, async () => ({ status: 400, corpo: JSON.stringify({ erros: [{ Codigo: "E0840", Descricao: "Prazo expirado" }] }) }));
+  assert.deepEqual(recusa, { ok: false, erros: [{ codigo: "E0840", descricao: "Prazo expirado" }] });
+});

@@ -68,12 +68,18 @@ export class AdministracaoService {
         focus: !!(
           empresa.configuracao?.integracoes as { focus?: boolean } | null
         )?.focus,
+        sefaz: !!(
+          empresa.configuracao?.integracoes as { sefaz?: boolean } | null
+        )?.sefaz,
       },
       credenciais: {
         mercadoPago: !!process.env.MERCADO_PAGO_ACCESS_TOKEN,
         asaas: !!process.env.ASAAS_API_KEY,
         pagarme: !!process.env.PAGARME_SECRET_KEY,
         focus: !!process.env.FOCUS_TOKEN || !!process.env.FOCUS_TOKEN_PRODUCAO,
+        sefaz:
+          !!process.env.CERTIFICADO_A1_ARQUIVO &&
+          !!process.env.CERTIFICADO_A1_SENHA_ARQUIVO,
         correios:
           !!process.env.CORREIOS_USUARIO &&
           !!process.env.CORREIOS_CODIGO_ACESSO &&

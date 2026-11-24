@@ -46,6 +46,8 @@ export const configuracaoSchema = z.strictObject({
     asaas: z.boolean(),
     pagarme: z.boolean(),
     focus: z.boolean(),
+    // Notas recebidas direto na SEFAZ, com o certificado A1 da empresa (sem custo de intermediário).
+    sefaz: z.boolean().default(false),
   }),
   freteGratisAtivo: z.boolean(),
   freteGratisMinimo: precoSchema,

@@ -539,6 +539,8 @@ model ConfiguracaoEmpresa {
   freteGratisMinimo Decimal @default(0) @db.Decimal(12,2)
   correiosAtivo Boolean @default(false)
   contaOnlineId String?
+  /// Último NSU lido na Distribuição DF-e da SEFAZ (busca gratuita das notas recebidas).
+  ultimoNsuDfe BigInt @default(0)
   empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
 }
 

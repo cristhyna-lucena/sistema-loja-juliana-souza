@@ -9,6 +9,7 @@ import {
 import { CorreiosClient } from "./correios";
 import { IntegrationError, requestJson, secret } from "./http";
 import { lerNfe } from "./xml";
+import { manifestarSefaz, sincronizarSefaz } from "./fiscal-sefaz";
 
 type Job = Prisma.IntegracaoJobGetPayload<{}>;
 type Payload = { [key: string]: Prisma.JsonValue };
@@ -270,6 +271,11 @@ export async function processarJob(
     });
     return;
   }
+  // Notas recebidas direto na SEFAZ (gratuito), quando a integração "sefaz" está ligada.
+  if (config && (config.integracoes as { sefaz?: boolean } | null)?.sefaz) {
+    if (job.tipo === "FOCUS_SINCRONIZAR") return sincronizarSefaz(db, job, config);
+    if (job.tipo === "FOCUS_MANIFESTAR") return manifestarSefaz(db, job, config, payload);
+  }
   const focus = new FocusClient(config?.ambienteFiscal ?? "homologacao");
   if (job.tipo === "FOCUS_SINCRONIZAR") {
     const empresa = await db.empresa.findUniqueOrThrow({
@@ -375,9 +381,9 @@ export function startIntegrationWorker(
     });
     for (const config of configuracoes) {
       if (!config.empresa.ativa) continue;
-      const flags = config.integracoes as { focus?: boolean } | null;
+      const flags = config.integracoes as { focus?: boolean; sefaz?: boolean } | null;
       const jobs: Prisma.IntegracaoJobCreateManyInput[] = [];
-      if (flags?.focus)
+      if (flags?.focus || flags?.sefaz)
         jobs.push({
           empresaId: config.empresaId,
           tipo: "FOCUS_SINCRONIZAR",

@@ -316,7 +316,8 @@ export class ComprasService {
           const configuracao = await tx.configuracaoEmpresa.findUnique({
             where: { empresaId: user.empresaId },
           });
-          if ((configuracao?.integracoes as { focus?: boolean } | null)?.focus)
+          const flags = configuracao?.integracoes as { focus?: boolean; sefaz?: boolean } | null;
+          if (flags?.focus || flags?.sefaz)
             await tx.integracaoJob.create({
               data: {
                 empresaId: user.empresaId,

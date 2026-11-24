@@ -47,7 +47,13 @@ export type DadosDps = {
     codigoNbs: string;
     descricao: string;
   };
-  valores: { valorServico: string; aliquotaIss?: string | null };
+  valores: {
+    valorServico: string;
+    /** pAliq: só quando a prefeitura não aplica a alíquota cadastrada (ex.: ISS retido). Em município conveniado, a SEFIN usa a dela. */
+    aliquotaIss?: string | null;
+    /** pTotTribMun (Lei 12.741, informativo): percentual aproximado dos tributos municipais. Padrão: a alíquota informada. */
+    percentualTributosMunicipais?: string | null;
+  };
 };
 
 const somenteDigitos = (v: string) => v.replace(/\D/g, "");
@@ -78,6 +84,7 @@ function conferir(d: DadosDps) {
   if (!/^\d{1,5}$/.test(d.numero.serie) || !Number.isInteger(d.numero.numero) || d.numero.numero < 1) erros.push("série ou número da DPS");
   if (!/^\d{1,13}\.\d{2}$/.test(d.valores.valorServico) || Number(d.valores.valorServico) <= 0) erros.push("valor do serviço");
   if (d.valores.aliquotaIss && !/^\d{1,2}\.\d{2}$/.test(d.valores.aliquotaIss)) erros.push("alíquota do ISS (ex.: 2.00)");
+  if (d.valores.percentualTributosMunicipais && !/^\d{1,2}\.\d{2}$/.test(d.valores.percentualTributosMunicipais)) erros.push("percentual de tributos (ex.: 2.00)");
   if (d.servico.descricao.trim().length < 1) erros.push("descrição do serviço");
   const doc = d.tomador ? somenteDigitos(d.tomador.documento) : "";
   if (d.tomador && doc.length !== 11 && doc.length !== 14) erros.push("CPF ou CNPJ do tomador");
@@ -122,8 +129,9 @@ export function montarDps(d: DadosDps, agora: Date): { id: string; xml: string }
   const aliquota = d.valores.aliquotaIss ? tag("pAliq", d.valores.aliquotaIss) : "";
   const tribMun = tag("tribMun", tag("tribISSQN", "1") + tag("tpRetISSQN", "1") + aliquota);
   // ME/EPP: percentual aproximado dos tributos = alíquota do ISS (como o emissor web); sem alíquota, "não informado".
-  const totTrib = tag("totTrib", d.valores.aliquotaIss
-    ? tag("pTotTrib", tag("pTotTribFed", "0.00") + tag("pTotTribEst", "0.00") + tag("pTotTribMun", d.valores.aliquotaIss))
+  const percentual = d.valores.percentualTributosMunicipais ?? d.valores.aliquotaIss;
+  const totTrib = tag("totTrib", percentual
+    ? tag("pTotTrib", tag("pTotTribFed", "0.00") + tag("pTotTribEst", "0.00") + tag("pTotTribMun", percentual))
     : tag("indTotTrib", "0"));
   const valores = tag("valores", tag("vServPrest", tag("vServ", d.valores.valorServico)) + tag("trib", tribMun + totTrib));
   const xml =

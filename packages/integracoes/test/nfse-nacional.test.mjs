@@ -51,6 +51,9 @@ test("produção usa o leiaute vigente: sem finNFSe e com a descrição antes do
   assert.match(xml, /<tribMun><tribISSQN>1<\/tribISSQN><tpRetISSQN>1<\/tpRetISSQN><pAliq>2.00<\/pAliq><\/tribMun>/);
   const semAliquota = montarDps({ ...DADOS, ambiente: "producao", valores: { valorServico: "10.00" } }, AGORA).xml;
   assert.match(semAliquota, /<totTrib><indTotTrib>0<\/indTotTrib><\/totTrib>/);
+  // Sem retenção em município conveniado: sem pAliq, com o percentual informativo de tributos.
+  const informativo = montarDps({ ...DADOS, ambiente: "producao", valores: { valorServico: "185.00", percentualTributosMunicipais: "2.00" } }, AGORA).xml;
+  assert.match(informativo, /<tribMun><tribISSQN>1<\/tribISSQN><tpRetISSQN>1<\/tpRetISSQN><\/tribMun><totTrib><pTotTrib><pTotTribFed>0.00<\/pTotTribFed><pTotTribEst>0.00<\/pTotTribEst><pTotTribMun>2.00<\/pTotTribMun><\/pTotTrib><\/totTrib>/);
 });
 
 test("dados inválidos não chegam à SEFIN", () => {

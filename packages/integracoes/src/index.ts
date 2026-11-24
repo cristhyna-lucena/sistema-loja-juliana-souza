@@ -7,3 +7,4 @@ export * from "./jobs";
 
 export * from "./sefaz";
 export * from "./fiscal-sefaz";
+export * from "./nfse-nacional";

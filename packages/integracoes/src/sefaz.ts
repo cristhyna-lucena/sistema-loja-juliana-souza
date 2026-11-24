@@ -72,8 +72,9 @@ export const enviarSoap: EnvioSoap = (url, acao, envelope, certificado) =>
       url,
       {
         method: "POST",
-        pfx: certificado.pfx,
-        passphrase: certificado.senha,
+        // Chave e certificado já extraídos: muitos .pfx de A1 usam cifras antigas que o OpenSSL 3 do Node recusa.
+        key: certificado.chavePem,
+        cert: certificado.certificadoPem,
         timeout: 30000,
         headers: { "Content-Type": `application/soap+xml; charset=utf-8; action="${acao}"` },
       },
@@ -89,7 +90,10 @@ export const enviarSoap: EnvioSoap = (url, acao, envelope, certificado) =>
         });
         res.on("end", () => {
           const corpo = Buffer.concat(partes).toString("utf8");
-          if ((res.statusCode ?? 500) >= 500) reject(new IntegrationError("SEFAZ", res.statusCode ?? 500, true));
+          // 401/403: o servidor da SEFAZ recusou o certificado (vencido, revogado ou de cadeia não aceita).
+          if (res.statusCode === 401 || res.statusCode === 403)
+            reject(new IntegrationError("SEFAZ (certificado recusado: vencido ou inválido)", res.statusCode, false));
+          else if ((res.statusCode ?? 500) >= 500) reject(new IntegrationError("SEFAZ", res.statusCode ?? 500, true));
           else resolve(corpo);
         });
       },

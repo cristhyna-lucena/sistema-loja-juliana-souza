@@ -227,7 +227,8 @@ export function lerRespostaSefin(r: RespostaHttp): ResultadoSefin {
 /** Monta, assina e envia a DPS. A SEFIN devolve a NFS-e autorizada ou os erros de validação. */
 export async function emitirNfse(d: DadosDps, certificado: CertificadoA1, agora: Date, envio: EnvioHttps = enviarHttps) {
   const { id, xml } = montarDps(d, agora);
-  const assinado = assinarXml(xml, "infDPS", certificado);
+  // A SEFIN exige a declaração de codificação (E1229 sem ela).
+  const assinado = `<?xml version="1.0" encoding="UTF-8"?>` + assinarXml(xml, "infDPS", certificado);
   const resposta = await envio("POST", urlSefin(d.ambiente) + "/nfse", JSON.stringify({ dpsXmlGZipB64: gzipB64(assinado) }), certificado);
   return { idDps: id, dpsAssinada: assinado, resultado: lerRespostaSefin(resposta) };
 }

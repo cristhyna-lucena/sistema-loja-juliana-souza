@@ -193,7 +193,7 @@ class Desenho {
 }
 
 /** Gera o PDF do DANFSe a partir do XML autorizado da NFS-e. */
-export async function gerarDanfse(xmlNfse: string): Promise<Uint8Array> {
+export async function gerarDanfse(xmlNfse: string, opcoes: { logo?: Uint8Array | null } = {}): Promise<Uint8Array> {
   const d = lerNfse(xmlNfse);
   const pdf = await PDFDocument.create();
   pdf.setTitle(`NFS-e ${d.numero} - ${d.chave}`);
@@ -206,10 +206,21 @@ export async function gerarDanfse(xmlNfse: string): Promise<Uint8Array> {
   const qr = await pdf.embedPng(png);
   const tamanhoQr = 62;
   pagina.drawImage(qr, { x: A4.largura - MARGEM - tamanhoQr, y: g.y - tamanhoQr, width: tamanhoQr, height: tamanhoQr });
-  g.texto("NFS-e - Nota Fiscal de Serviço eletrônica", MARGEM, g.y - 12, 11, true);
-  g.texto("DANFSe v2.0 - Documento Auxiliar da NFS-e", MARGEM, g.y - 25, 9, true);
-  g.texto(`Município: ${vazio(d.municipio)}   |   Ambiente Gerador: ${vazio(d.ambienteGerador)}   |   Tipo de Ambiente: ${vazio(d.tipoAmbiente)}`, MARGEM, g.y - 37, 7.5);
-  if (d.tipoAmbiente === "2") g.texto("HOMOLOGAÇÃO - SEM VALOR FISCAL", MARGEM, g.y - 49, 9, true);
+  // Logo do prestador (opcional, PNG ou JPEG) à esquerda; o texto do cabeçalho vem depois dela.
+  let x = MARGEM;
+  if (opcoes.logo?.length) {
+    const bytes = opcoes.logo;
+    const ehPng = bytes[0] === 0x89 && bytes[1] === 0x50;
+    const imagem = ehPng ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
+    const escala = Math.min(110 / imagem.width, 56 / imagem.height);
+    const w = imagem.width * escala, h = imagem.height * escala;
+    pagina.drawImage(imagem, { x: MARGEM, y: g.y - h, width: w, height: h });
+    x = MARGEM + w + 10;
+  }
+  g.texto("NFS-e - Nota Fiscal de Serviço eletrônica", x, g.y - 12, 11, true);
+  g.texto("DANFSe v2.0 - Documento Auxiliar da NFS-e", x, g.y - 25, 9, true);
+  g.texto(`Município: ${vazio(d.municipio)}   |   Ambiente Gerador: ${vazio(d.ambienteGerador)}   |   Tipo de Ambiente: ${vazio(d.tipoAmbiente)}`, x, g.y - 37, 7.5);
+  if (d.tipoAmbiente === "2") g.texto("HOMOLOGAÇÃO - SEM VALOR FISCAL", x, g.y - 49, 9, true);
   g.texto("Consulte a autenticidade pelo QR Code", A4.largura - MARGEM - 150, g.y - tamanhoQr - 8, 6);
   g.texto("ou pela chave no portal nacional da NFS-e.", A4.largura - MARGEM - 150, g.y - tamanhoQr - 15, 6);
   g.y -= tamanhoQr + 20;

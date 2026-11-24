@@ -46,3 +46,12 @@ test("gera um PDF válido de uma página, mesmo com caracteres fora da fonte (em
   const { PDFDocument } = await import("pdf-lib");
   assert.equal((await PDFDocument.load(pdf)).getPageCount(), 1);
 });
+
+test("aceita a logo do prestador (PNG) no cabeçalho", async () => {
+  const QRCode = (await import("qrcode")).default;
+  const logo = await QRCode.toBuffer("logo de teste", { width: 120 });
+  const { PDFDocument } = await import("pdf-lib");
+  const pdf = await gerarDanfse(XML, { logo });
+  assert.equal((await PDFDocument.load(pdf)).getPageCount(), 1);
+  assert.ok(pdf.length > (await gerarDanfse(XML)).length);
+});

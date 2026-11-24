@@ -57,3 +57,14 @@ As novas suítes criam bancos temporários e os removem ao finalizar. O teste do
 - Nove migrations aplicadas no banco local, sem pendências. Capturas de compras, pedido e conta em celular inspecionadas.
 
 O driver PostgreSQL emite um aviso de depreciação durante leituras relacionais do Prisma; as verificações transacionais passaram. Não foi feita alteração no código da dependência para esconder o aviso.
+
+## Notas recebidas direto na SEFAZ (gratuito)
+
+Alternativa à Focus para **buscar as notas emitidas contra o CNPJ** e fazer a **manifestação do destinatário** (ciência, confirmação, desconhecimento, operação não realizada), usando os serviços nacionais da NF-e (Distribuição DF-e e Recepção de Evento do Ambiente Nacional), sem intermediário pago.
+
+1. Guardar o certificado A1 da empresa no servidor, fora do repositório, com acesso só do usuário do sistema (ex.: modo 600): o arquivo `.pfx` e a senha num arquivo de texto separado.
+2. Informar os caminhos no ambiente da API e do worker: `CERTIFICADO_A1_ARQUIVO` (o `.pfx`) e `CERTIFICADO_A1_SENHA_ARQUIVO` (a senha). Nenhum dos dois vai para o `.env` versionado nem para o chat.
+3. Conferir na configuração da empresa o CNPJ, a UF do endereço e o ambiente fiscal (`producao` para as notas reais: em homologação a SEFAZ não tem as notas de compra da empresa).
+4. Em Configurações → Integrações, ligar **SEFAZ direta**. A busca roda a cada 2 horas (e no botão Sincronizar); a nota chega como resumo e, ao abrir e dar ciência, o XML completo é baixado. Daí segue o fluxo de sempre: **Conferir produtos e dar entrada**.
+
+Limites da SEFAZ: os documentos ficam disponíveis por 90 dias; consultas seguidas sem novidade geram bloqueio de cerca de 1 hora (código 656), por isso a busca não é repetida na hora. Emissão de NFS-e e NFC-e continua pela Focus nesta etapa.

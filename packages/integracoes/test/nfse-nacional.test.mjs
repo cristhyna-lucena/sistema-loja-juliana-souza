@@ -39,7 +39,7 @@ test("DPS de ME/EPP do Simples na homologação (leiaute novo): ordem dos grupos
   assert.match(xml, /<prest><CNPJ>00000000000191<\/CNPJ><IM>123<\/IM><regTrib><opSimpNac>3<\/opSimpNac><regApTribSN>1<\/regApTribSN><regEspTrib>0<\/regEspTrib><\/regTrib><\/prest>/);
   assert.match(xml, /<toma><CPF>52998224725<\/CPF><xNome>Maria &amp; Filhos &lt;teste&gt;<\/xNome><\/toma>/);
   assert.match(xml, /<cServ><cTribNac>060301<\/cTribNac><cNBS>126021000<\/cNBS><xDescServ>Drenagem linfática - 1 sessão<\/xDescServ><\/cServ>/);
-  assert.match(xml, /<valores><vServPrest><vServ>150.00<\/vServ><\/vServPrest><trib><tribMun><tribISSQN>1<\/tribISSQN><pAliq>2.00<\/pAliq><tpRetISSQN>1<\/tpRetISSQN><\/tribMun><totTrib><pTotTrib><pTotTribFed>0.00<\/pTotTribFed><pTotTribEst>0.00<\/pTotTribEst><pTotTribMun>2.00<\/pTotTribMun><\/pTotTrib><\/totTrib><\/trib><\/valores>/);
+  assert.match(xml, /<valores><vServPrest><vServ>150.00<\/vServ><\/vServPrest><trib><tribMun><tribISSQN>1<\/tribISSQN><tpRetISSQN>1<\/tpRetISSQN><pAliq>2.00<\/pAliq><\/tribMun><totTrib><pTotTrib><pTotTribFed>0.00<\/pTotTribFed><pTotTribEst>0.00<\/pTotTribEst><pTotTribMun>2.00<\/pTotTribMun><\/pTotTrib><\/totTrib><\/trib><\/valores>/);
 });
 
 test("produção usa o leiaute vigente: sem finNFSe e com a descrição antes do cNBS", () => {

@@ -117,11 +117,10 @@ export function montarDps(d: DadosDps, agora: Date): { id: string; xml: string }
     tag("cTribNac", s.codigoTributacaoNacional) + (s.codigoTributacaoMunicipal ? tag("cTribMun", s.codigoTributacaoMunicipal) : "") +
     (novo ? nbs + descricao : descricao + nbs));
   const serv = tag("serv", tag("locPrest", tag("cLocPrestacao", s.codigoMunicipioPrestacao)) + cServ);
-  // ISS tributável, sem retenção (1). Alíquota só quando informada. A ordem segue o leiaute de cada ambiente:
-  // produção (conferida numa NFS-e real do Emissor Nacional web, 17/11/2026) manda a retenção antes da alíquota.
+  // ISS tributável, sem retenção (1); alíquota só quando informada. Retenção antes da alíquota nos dois leiautes
+  // (XSD 1.01 de produção e da produção restrita; conferido também numa NFS-e real do emissor web).
   const aliquota = d.valores.aliquotaIss ? tag("pAliq", d.valores.aliquotaIss) : "";
-  const retencao = tag("tpRetISSQN", "1");
-  const tribMun = tag("tribMun", tag("tribISSQN", "1") + (novo ? aliquota + retencao : retencao + aliquota));
+  const tribMun = tag("tribMun", tag("tribISSQN", "1") + tag("tpRetISSQN", "1") + aliquota);
   // ME/EPP: percentual aproximado dos tributos = alíquota do ISS (como o emissor web); sem alíquota, "não informado".
   const totTrib = tag("totTrib", d.valores.aliquotaIss
     ? tag("pTotTrib", tag("pTotTribFed", "0.00") + tag("pTotTribEst", "0.00") + tag("pTotTribMun", d.valores.aliquotaIss))

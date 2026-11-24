@@ -214,6 +214,7 @@ export function SettingsPanel() {
               ["asaas", "Asaas"],
               ["pagarme", "Pagar.me"],
               ["focus", "Focus NFe"],
+              ["sefaz", "SEFAZ direta: notas recebidas (gratuito, certificado A1)"],
             ] as const
           ).map(([field, label]) => (
             <div className="form-actions" key={field}>

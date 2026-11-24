@@ -6,3 +6,4 @@ export * from "./xml";
 export * from "./jobs";
 
 export * from "./sefaz";
+export * from "./fiscal-sefaz";

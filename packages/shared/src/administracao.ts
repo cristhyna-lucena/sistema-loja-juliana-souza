@@ -48,6 +48,8 @@ export const configuracaoSchema = z.strictObject({
     focus: z.boolean(),
     // Notas recebidas direto na SEFAZ, com o certificado A1 da empresa (sem custo de intermediário).
     sefaz: z.boolean().default(false),
+    // NFS-e direto no Emissor Nacional (gratuito, certificado A1), no lugar da Focus.
+    nfseNacional: z.boolean().default(false),
   }),
   freteGratisAtivo: z.boolean(),
   freteGratisMinimo: precoSchema,

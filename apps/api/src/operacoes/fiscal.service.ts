@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { Prisma } from "@sistema/db";
-import { lerNfe } from "@sistema/integracoes";
+import { IntegrationError, gerarDanfse, lerNfe, montarDps, type DadosDps } from "@sistema/integracoes";
 import {
   enderecoSchema,
   type EmitirNotaInput,
@@ -277,6 +277,9 @@ export class FiscalService {
                 where: { empresaId: user.empresaId, id: voucher.clienteId },
               })
             : null;
+          if ((config.integracoes as { nfseNacional?: boolean } | null)?.nfseNacional) {
+            payload = await this.payloadNfseNacional(tx, user.empresaId, empresa.cnpj, config, endereco.data.codigoIbge, voucher, cliente, input);
+          } else {
           if (
             !voucher ||
             !cliente?.cpfCnpj ||
@@ -311,6 +314,7 @@ export class FiscalService {
               codigo_municipio: endereco.data.codigoIbge,
             },
           };
+          }
         } else {
           const venda = await tx.venda.findFirst({
             where: {
@@ -527,6 +531,55 @@ export class FiscalService {
         }),
     );
   }
+  /** NFS-e Nacional: dados da DPS guardados na nota; conferidos aqui para o erro de cadastro aparecer na hora. */
+  private async payloadNfseNacional(
+    tx: Prisma.TransactionClient,
+    empresaId: string,
+    cnpj: string,
+    config: { inscricaoMunicipal: string | null; regimeTributario: string | null; telefone: string | null; email: string | null; ambienteFiscal: string },
+    codigoIbge: string,
+    voucher: { valor: Prisma.Decimal; servicoNome: string } | null,
+    cliente: { cpfCnpj: string | null; nome: string; email: string | null } | null,
+    input: EmitirNotaInput,
+  ): Promise<Prisma.InputJsonObject> {
+    if (!voucher || !cliente?.cpfCnpj || !/^\d{2}\.\d{2}\.\d{2}$/.test(input.codigoListaServico ?? "") || !input.codigoNbs)
+      throw new BadRequestException(
+        "Confira voucher, documento do cliente, código de tributação nacional (00.00.00) e código NBS.",
+      );
+    // Numeração própria da DPS do sistema (série 1); notas recusadas também consomem número (lacunas são permitidas).
+    const anteriores = await tx.notaEmitida.count({
+      where: { empresaId, modelo: "NFSE", payload: { path: ["provedor"], equals: "NFSE_NACIONAL" } },
+    });
+    const percentual = input.aliquotaIss ? Number(input.aliquotaIss).toFixed(2) : null;
+    const dados: Omit<DadosDps, "ambiente" | "numero"> & { numero: { serie: string; numero: number } } = {
+      prestador: {
+        cnpj,
+        inscricaoMunicipal: config.inscricaoMunicipal,
+        codigoMunicipio: codigoIbge,
+        // ME/EPP do Simples (o ISS vai no DAS); fora do Simples, não optante.
+        opcaoSimples: config.regimeTributario === "SIMPLES" ? 3 : 1,
+        regimeApuracaoSimples: 1,
+        telefone: config.telefone,
+        email: config.email,
+      },
+      numero: { serie: "1", numero: anteriores + 1 },
+      tomador: { documento: cliente.cpfCnpj, nome: cliente.nome, email: cliente.email },
+      servico: {
+        codigoMunicipioPrestacao: codigoIbge,
+        codigoTributacaoNacional: input.codigoListaServico!.replace(/\D/g, ""),
+        codigoNbs: input.codigoNbs.replace(/\D/g, ""),
+        descricao: voucher.servicoNome,
+      },
+      valores: { valorServico: voucher.valor.toFixed(2), percentualTributosMunicipais: percentual },
+    };
+    try {
+      const agora = new Date();
+      montarDps({ ...dados, ambiente: config.ambienteFiscal, numero: { ...dados.numero, emitidaEm: agora } }, agora);
+    } catch (error) {
+      throw new BadRequestException(error instanceof IntegrationError ? error.provider : "Dados da NFS-e inválidos.");
+    }
+    return { provedor: "NFSE_NACIONAL", ...dados } as unknown as Prisma.InputJsonObject;
+  }
   async acaoNota(
     user: Identity,
     id: string,
@@ -565,6 +618,16 @@ export class FiscalService {
     });
     if (!nota?.xml) throw new NotFoundException("XML ainda indisponível.");
     return nota.xml;
+  }
+  /** DANFSe (PDF) gerado pelo sistema a partir do XML da NFS-e Nacional autorizada. */
+  async danfse(empresaId: string, id: string) {
+    const nota = await this.db.client.notaEmitida.findFirst({
+      where: { empresaId, id, modelo: "NFSE" },
+      select: { xml: true, payload: true },
+    });
+    if (!nota?.xml || (nota.payload as { provedor?: unknown } | null)?.provedor !== "NFSE_NACIONAL")
+      throw new NotFoundException("PDF disponível só para NFS-e Nacional autorizada.");
+    return Buffer.from(await gerarDanfse(nota.xml));
   }
   jobs(empresaId: string) {
     return this.db.client.integracaoJob.findMany({

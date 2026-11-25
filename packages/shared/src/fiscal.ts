@@ -13,9 +13,15 @@ export const emitirNotaSchema = z
     voucherId: gestaoId.optional(),
     modelo: z.enum(["NFE", "NFCE", "NFSE"]),
     endereco: enderecoSchema.nullable().default(null),
+    // Focus: item da lista (00.00). NFS-e Nacional: código de tributação nacional (00.00.00).
     codigoListaServico: z
       .string()
-      .regex(/^\d{2}\.\d{2}$/)
+      .regex(/^\d{2}\.\d{2}(\.\d{2})?$/)
+      .optional(),
+    // NFS-e Nacional: Nomenclatura Brasileira de Serviços (9 dígitos, com ou sem pontos: 1.2602.10.00).
+    codigoNbs: z
+      .string()
+      .regex(/^\d\.?\d{4}\.?\d{2}\.?\d{2}$/)
       .optional(),
     aliquotaIss: z
       .string()

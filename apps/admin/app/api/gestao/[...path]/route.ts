@@ -20,7 +20,7 @@ async function proxy(req: NextRequest, context: { params: Promise<{ path: string
     [new RegExp("^fiscal/recebidas/"+trecho+"$"), ["GET"]],
     [new RegExp("^fiscal/recebidas/"+trecho+"/ciencia$"), ["POST"]],
     [new RegExp("^fiscal/emitidas/"+trecho+"/(consultar|cancelar|corrigir)$"), ["POST"]],
-    [new RegExp("^fiscal/emitidas/"+trecho+"/xml$"), ["GET"]],
+    [new RegExp("^fiscal/emitidas/"+trecho+"/(xml|danfse)$"), ["GET"]],
     [/^administracao\/(configuracao|usuarios)$/, ["GET", "POST"]],
     [new RegExp("^administracao/usuarios/"+trecho+"$"), ["PATCH"]],
     [new RegExp("^administracao/produtos/"+trecho+"$"), ["GET", "POST"]],

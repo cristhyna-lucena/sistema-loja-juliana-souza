@@ -73,7 +73,8 @@ export function FiscalPanel({
   const [modelo, setModelo] = useState("NFCE"),
     [origemId, setOrigemId] = useState(""),
     [codigoListaServico, setCodigoListaServico] = useState(""),
-    [aliquotaIss, setAliquotaIss] = useState("");
+    [aliquotaIss, setAliquotaIss] = useState(""),
+    [codigoNbs, setCodigoNbs] = useState("");
   const [selected, setSelected] = useState<{
       id: string;
       acao: "cancelar" | "corrigir";
@@ -109,7 +110,12 @@ export function FiscalPanel({
       {
         modelo,
         ...(modelo === "NFSE"
-          ? { voucherId: origemId, codigoListaServico, aliquotaIss }
+          ? {
+              voucherId: origemId,
+              codigoListaServico,
+              ...(aliquotaIss ? { aliquotaIss } : {}),
+              ...(codigoNbs ? { codigoNbs } : {}),
+            }
           : { vendaId: origemId }),
         endereco: null,
       },
@@ -438,7 +444,8 @@ export function FiscalPanel({
               {modelo === "NFSE" && (
                 <>
                   <label htmlFor="lista-servico">
-                    Item da lista de serviços (00.00)
+                    Código do serviço (NFS-e Nacional: 00.00.00, ex.: 06.03.01;
+                    Focus: 00.00)
                   </label>
                   <input
                     id="lista-servico"
@@ -448,10 +455,20 @@ export function FiscalPanel({
                       setCodigoListaServico(event.target.value)
                     }
                   />
-                  <label htmlFor="aliquota-iss">Alíquota ISS (%)</label>
+                  <label htmlFor="codigo-nbs">
+                    Código NBS (só NFS-e Nacional, ex.: 1.2602.10.00)
+                  </label>
+                  <input
+                    id="codigo-nbs"
+                    value={codigoNbs}
+                    onChange={(event) => setCodigoNbs(event.target.value)}
+                  />
+                  <label htmlFor="aliquota-iss">
+                    Alíquota ISS / tributos aproximados (%) — no Simples sem
+                    retenção vale só como informação
+                  </label>
                   <input
                     id="aliquota-iss"
-                    required
                     inputMode="decimal"
                     value={aliquotaIss}
                     onChange={(event) => setAliquotaIss(event.target.value)}

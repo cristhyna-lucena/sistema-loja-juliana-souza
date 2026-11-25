@@ -10,6 +10,7 @@ import { CorreiosClient } from "./correios";
 import { IntegrationError, requestJson, secret } from "./http";
 import { lerNfe } from "./xml";
 import { manifestarSefaz, sincronizarSefaz } from "./fiscal-sefaz";
+import { ehNfseNacional, processarNfseNacional } from "./nfse-rotinas";
 
 type Job = Prisma.IntegracaoJobGetPayload<{}>;
 type Payload = { [key: string]: Prisma.JsonValue };
@@ -275,6 +276,14 @@ export async function processarJob(
   if (config && (config.integracoes as { sefaz?: boolean } | null)?.sefaz) {
     if (job.tipo === "FOCUS_SINCRONIZAR") return sincronizarSefaz(db, job, config);
     if (job.tipo === "FOCUS_MANIFESTAR") return manifestarSefaz(db, job, config, payload);
+  }
+  // NFS-e emitida pelo Emissor Nacional: não passa pela Focus (nem exige o token dela).
+  if (["FOCUS_EMITIR", "FOCUS_CONSULTAR", "FOCUS_CANCELAR", "FOCUS_CORRIGIR"].includes(job.tipo)) {
+    const notaNacional = await db.notaEmitida.findFirst({
+      where: { empresaId: job.empresaId, id: String(payload.notaId ?? job.referencia) },
+    });
+    if (notaNacional && ehNfseNacional(notaNacional))
+      return processarNfseNacional(db, job, notaNacional, config?.ambienteFiscal ?? "homologacao", payload);
   }
   const focus = new FocusClient(config?.ambienteFiscal ?? "homologacao");
   if (job.tipo === "FOCUS_SINCRONIZAR") {

@@ -278,6 +278,17 @@ export class FiscalController {
     );
     response.send(await this.service.xml(req.usuario.empresaId, validId));
   }
+  @Get("emitidas/:id/danfse") async danfse(
+    @Req() req: AuthRequest,
+    @Param("id") id: string,
+    @Res() response: Response,
+  ) {
+    const validId = validar(gestaoId, id);
+    const pdf = await this.service.danfse(req.usuario.empresaId, validId);
+    response.setHeader("Content-Type", "application/pdf");
+    response.setHeader("Content-Disposition", 'inline; filename="nfse-' + validId + '.pdf"');
+    response.send(pdf);
+  }
   @Get("integracoes") jobs(@Req() req: AuthRequest) {
     return this.service.jobs(req.usuario.empresaId);
   }

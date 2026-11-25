@@ -215,6 +215,7 @@ export function SettingsPanel() {
               ["pagarme", "Pagar.me"],
               ["focus", "Focus NFe"],
               ["sefaz", "SEFAZ direta: notas recebidas (gratuito, certificado A1)"],
+              ["nfseNacional", "NFS-e Nacional: emissão de NFS-e direto no Emissor Nacional (gratuito, certificado A1)"],
             ] as const
           ).map(([field, label]) => (
             <div className="form-actions" key={field}>

@@ -71,6 +71,9 @@ export class AdministracaoService {
         sefaz: !!(
           empresa.configuracao?.integracoes as { sefaz?: boolean } | null
         )?.sefaz,
+        nfseNacional: !!(
+          empresa.configuracao?.integracoes as { nfseNacional?: boolean } | null
+        )?.nfseNacional,
       },
       credenciais: {
         mercadoPago: !!process.env.MERCADO_PAGO_ACCESS_TOKEN,
@@ -78,6 +81,9 @@ export class AdministracaoService {
         pagarme: !!process.env.PAGARME_SECRET_KEY,
         focus: !!process.env.FOCUS_TOKEN || !!process.env.FOCUS_TOKEN_PRODUCAO,
         sefaz:
+          !!process.env.CERTIFICADO_A1_ARQUIVO &&
+          !!process.env.CERTIFICADO_A1_SENHA_ARQUIVO,
+        nfseNacional:
           !!process.env.CERTIFICADO_A1_ARQUIVO &&
           !!process.env.CERTIFICADO_A1_SENHA_ARQUIVO,
         correios:
